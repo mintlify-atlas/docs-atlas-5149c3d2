@@ -80,11 +80,13 @@
           {
             "group": "REST API",
             "pages": [
+              "api/rest/health",
               "api/rest/missions",
               "api/rest/data-packages",
               "api/rest/emergency",
               "api/rest/geo-objects",
               "api/rest/excheck",
+              "api/rest/system-users",
               "api/rest/connections"
             ]
           },

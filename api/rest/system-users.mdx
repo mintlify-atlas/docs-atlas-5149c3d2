@@ -1,0 +1,239 @@
+---
+title: System users
+description: REST API endpoints for managing FreeTAKServer system users
+---
+
+The System User API allows you to manage user accounts for FreeTAKServer, including creating, retrieving, updating, and deleting users.
+
+## Authentication
+
+All System User endpoints require HTTP Basic Authentication with a valid API token. See [Authentication](/api/authentication) for details.
+
+## Get all system users
+
+Retrieve a list of all system users.
+
+### Endpoint
+
+```http
+GET /ManageSystemUser/getAll
+```
+
+### Response
+
+<ResponseField name="SystemUsers" type="array">
+  Array of system user objects
+
+  <Expandable title="SystemUser object">
+    <ResponseField name="id" type="string">
+      Unique user identifier
+    </ResponseField>
+    <ResponseField name="username" type="string">
+      Username
+    </ResponseField>
+    <ResponseField name="token" type="string">
+      API token for authentication
+    </ResponseField>
+    <ResponseField name="certificatePackageName" type="string">
+      Name of the associated certificate package
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl -X GET http://localhost:19023/ManageSystemUser/getAll \
+  -H "Authorization: Bearer your-api-token"
+```
+
+<Accordion title="Response">
+```json
+{
+  "SystemUsers": [
+    {
+      "id": "1",
+      "username": "admin",
+      "token": "token-abc123",
+      "certificatePackageName": "admin.p12"
+    }
+  ]
+}
+```
+</Accordion>
+
+## Get specific system user
+
+Retrieve a specific system user by criteria.
+
+### Endpoint
+
+```http
+GET /ManageSystemUser/getSystemUser
+```
+
+### Request Body
+
+<ParamField body="username" type="string">
+  Username to search for
+</ParamField>
+
+<ParamField body="id" type="string">
+  User ID to search for
+</ParamField>
+
+### Response
+
+Same structure as Get All endpoint, filtered by the provided criteria.
+
+### Example
+
+```bash
+curl -X GET http://localhost:19023/ManageSystemUser/getSystemUser \
+  -H "Authorization: Bearer your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin"}'
+```
+
+## Create system user
+
+Create a new system user account.
+
+### Endpoint
+
+```http
+POST /ManageSystemUser/postSystemUser
+```
+
+### Request Body
+
+<ParamField body="username" type="string" required>
+  Username for the new user
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Password for the new user
+</ParamField>
+
+<ParamField body="token" type="string">
+  API token (generated if not provided)
+</ParamField>
+
+<ParamField body="certificatePackageName" type="string">
+  Certificate package name for client authentication
+</ParamField>
+
+### Response
+
+Returns success message with created user details.
+
+### Example
+
+```bash
+curl -X POST http://localhost:19023/ManageSystemUser/postSystemUser \
+  -H "Authorization: Bearer your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newuser",
+    "password": "securepass123"
+  }'
+```
+
+## Update system user
+
+Update an existing system user's information.
+
+### Endpoint
+
+```http
+PUT /ManageSystemUser/putSystemUser
+```
+
+### Request Body
+
+<ParamField body="id" type="string" required>
+  ID of the user to update
+</ParamField>
+
+<ParamField body="username" type="string">
+  New username
+</ParamField>
+
+<ParamField body="password" type="string">
+  New password
+</ParamField>
+
+<ParamField body="token" type="string">
+  New API token
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "user updated"
+}
+```
+
+### Example
+
+```bash
+curl -X PUT http://localhost:19023/ManageSystemUser/putSystemUser \
+  -H "Authorization: Bearer your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "1",
+    "password": "newpassword123"
+  }'
+```
+
+## Delete system user
+
+Delete a system user account.
+
+### Endpoint
+
+```http
+DELETE /ManageSystemUser/deleteSystemUser
+```
+
+### Request Body
+
+<ParamField body="id" type="string" required>
+  ID of the user to delete
+</ParamField>
+
+### Response
+
+Returns success message confirming deletion.
+
+### Example
+
+```bash
+curl -X DELETE http://localhost:19023/ManageSystemUser/deleteSystemUser \
+  -H "Authorization: Bearer your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{"id": "1"}'
+```
+
+## Error Responses
+
+All endpoints return appropriate HTTP status codes:
+
+- `200` - Success
+- `401` - Unauthorized (invalid or missing token)
+- `500` - Server error
+
+Error responses include a message describing the issue:
+
+```json
+{
+  "message": "An error occurred attempting to retrieve user(s)."
+}
+```
+
+## Related Documentation
+
+- [Authentication](/api/authentication) - Learn about API authentication
+- [Security Configuration](/configuration/security) - Configure user security settings
+- [Connections API](/api/rest/connections) - View connected clients

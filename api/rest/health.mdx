@@ -1,0 +1,98 @@
+---
+title: Health check
+description: API endpoint for checking FreeTAKServer status
+---
+
+The Health Check API provides a simple endpoint to verify that the FreeTAKServer REST API is running and responsive.
+
+## Check API status
+
+Simple health check endpoint that returns the API running status.
+
+### Endpoint
+
+```http
+GET /Alive
+```
+
+### Authentication
+
+This endpoint does not require authentication.
+
+### Response
+
+Returns a 200 status code with a simple text response indicating the API is running.
+
+**Status Code:** `200 OK`
+
+**Response Body:**
+```
+API is running
+```
+
+### Example
+
+```bash
+curl http://localhost:19023/Alive
+```
+
+<Accordion title="Response">
+```
+API is running
+```
+</Accordion>
+
+## Use Cases
+
+### Monitoring and Alerting
+
+Use the `/Alive` endpoint in your monitoring systems to check if FreeTAKServer is responsive:
+
+```bash
+#!/bin/bash
+response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:19023/Alive)
+if [ $response -eq 200 ]; then
+  echo "FreeTAKServer is running"
+else
+  echo "FreeTAKServer is down"
+fi
+```
+
+### Load Balancer Health Checks
+
+Configure your load balancer to use `/Alive` as the health check endpoint to verify backend servers are operational.
+
+### Docker Health Checks
+
+Include the health check in your Docker configuration:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:19023/Alive || exit 1
+```
+
+### Kubernetes Liveness Probe
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /Alive
+    port: 19023
+  initialDelaySeconds: 30
+  periodSeconds: 10
+```
+
+## Related Endpoints
+
+For more detailed server status information, use the WebSocket endpoints:
+
+- `serverHealth` - Get CPU, memory, and disk usage
+- `systemStatus` - Get detailed service status information
+- `serviceInfo` - Get status of all FTS services
+
+These WebSocket endpoints require authentication and provide real-time server metrics.
+
+## Related Documentation
+
+- [REST API Overview](/api/overview) - Learn about the REST API architecture
+- [Configuration](/configuration/main-config) - Configure REST API service settings

@@ -1,0 +1,743 @@
+---
+title: Installation
+description: Detailed installation guide for FreeTAKServer on Linux, Windows, and macOS
+---
+
+This guide covers installing FreeTAKServer on different operating systems, including system requirements, dependencies, and deployment options.
+
+## System requirements
+
+Before installing FreeTAKServer, ensure your system meets these minimum requirements:
+
+### Hardware requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **CPU** | 2 cores | 4+ cores |
+| **RAM** | 2 GB | 4 GB+ |
+| **Storage** | 1 GB | 10 GB+ (for database and data packages) |
+| **Network** | 100 Mbps | 1 Gbps |
+
+### Software requirements
+
+<Warning>
+FreeTAKServer 2.x requires **Python 3.11**. Earlier versions are not compatible.
+</Warning>
+
+- **Python**: 3.11 or higher (3.11 recommended)
+- **Pip**: Latest version
+- **Operating System**: 
+  - Linux (Ubuntu 20.04+, Debian 11+, RHEL 8+, or equivalent)
+  - Windows 10/11 or Windows Server 2019+
+  - macOS 11+ (Big Sur or later)
+
+### Network requirements
+
+FTS requires these ports to be accessible:
+
+| Port | Protocol | Service | Purpose |
+|------|----------|---------|----------|
+| 8087 | TCP | CoT Service | Client connections (ATAK/WinTAK) |
+| 8080 | HTTP | Data Package Service | Data package uploads/downloads |
+| 8443 | HTTPS | Secure Data Package Service | SSL data packages |
+| 8089 | TCP/SSL | SSL CoT Service | Encrypted client connections |
+| 19023 | HTTP | REST API | API endpoints |
+| 9000 | TCP | Federation Server | Server-to-server connections (optional) |
+
+<Note>
+All ports are configurable. These are the default values.
+</Note>
+
+## Installing Python 3.11
+
+If you don't have Python 3.11 installed, follow these platform-specific instructions:
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    # Add deadsnakes PPA for Python 3.11
+    sudo apt update
+    sudo apt install software-properties-common
+    sudo add-apt-repository ppa:deadsnakes/ppa
+    sudo apt update
+
+    # Install Python 3.11
+    sudo apt install python3.11 python3.11-dev python3.11-venv
+
+    # Install pip
+    sudo apt install python3-pip
+
+    # Verify installation
+    python3.11 --version
+    ```
+  </Tab>
+
+  <Tab title="RHEL/CentOS/Fedora">
+    ```bash
+    # RHEL 8/9 or CentOS 8/9
+    sudo dnf install python3.11 python3.11-devel
+
+    # Install pip
+    sudo dnf install python3-pip
+
+    # Verify installation
+    python3.11 --version
+    ```
+  </Tab>
+
+  <Tab title="Windows">
+    1. Download Python 3.11 from [python.org/downloads](https://www.python.org/downloads/)
+    2. Run the installer
+    3. **Important**: Check "Add Python to PATH" during installation
+    4. Verify installation:
+    
+    ```cmd
+    python --version
+    ```
+  </Tab>
+
+  <Tab title="macOS">
+    ```bash
+    # Using Homebrew
+    brew install python@3.11
+
+    # Verify installation
+    python3.11 --version
+
+    # Ensure pip is installed
+    python3.11 -m ensurepip --upgrade
+    ```
+  </Tab>
+</Tabs>
+
+## Installation methods
+
+Choose the installation method that best fits your deployment:
+
+### Method 1: PyPI installation (recommended)
+
+The simplest way to install FreeTAKServer is using pip from PyPI.
+
+<Steps>
+  <Step title="Install FreeTAKServer">
+    Install the latest stable version:
+
+    <CodeGroup>
+    ```bash Linux/macOS
+    # Basic installation
+    pip3 install FreeTAKServer
+
+    # With optional UI
+    pip3 install FreeTAKServer[ui]
+
+    # With development tools
+    pip3 install FreeTAKServer[dev]
+    ```
+
+    ```bash Windows
+    # Basic installation
+    python -m pip install FreeTAKServer
+
+    # With optional UI
+    python -m pip install FreeTAKServer[ui]
+    ```
+    </CodeGroup>
+
+    <Info>
+    The `[ui]` extra installs FreeTAKServer_UI for web-based administration. The `[dev]` extra includes testing tools like pytest.
+    </Info>
+  </Step>
+
+  <Step title="Verify installation">
+    Confirm FreeTAKServer is installed:
+
+    ```bash
+    pip3 show FreeTAKServer
+    ```
+
+    Expected output:
+    ```
+    Name: FreeTAKServer
+    Version: 2.2.1
+    Summary: An open source server for the TAK family of applications.
+    ```
+  </Step>
+</Steps>
+
+### Method 2: Virtual environment installation
+
+Using a virtual environment isolates FTS dependencies from other Python packages.
+
+<Steps>
+  <Step title="Create virtual environment">
+    ```bash
+    # Create project directory
+    mkdir freetakserver
+    cd freetakserver
+
+    # Create virtual environment
+    python3.11 -m venv venv
+
+    # Activate virtual environment
+    source venv/bin/activate  # Linux/macOS
+    venv\Scripts\activate     # Windows
+    ```
+  </Step>
+
+  <Step title="Install FreeTAKServer">
+    ```bash
+    # Upgrade pip
+    pip install --upgrade pip
+
+    # Install FreeTAKServer
+    pip install FreeTAKServer[ui]
+    ```
+  </Step>
+
+  <Step title="Create startup script">
+    Create a script to activate the environment and start FTS:
+
+    <CodeGroup>
+    ```bash start_fts.sh (Linux/macOS)
+    #!/bin/bash
+    cd /path/to/freetakserver
+    source venv/bin/activate
+    python -m FreeTAKServer.controllers.services.FTS -DataPackageIP $(hostname -I | awk '{print $1}')
+    ```
+
+    ```batch start_fts.bat (Windows)
+    @echo off
+    cd C:\path\to\freetakserver
+    call venv\Scripts\activate
+    python -m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP_HERE
+    ```
+    </CodeGroup>
+
+    Make it executable (Linux/macOS):
+    ```bash
+    chmod +x start_fts.sh
+    ```
+  </Step>
+</Steps>
+
+### Method 3: Development installation
+
+For contributors or those who want to modify FTS source code:
+
+<Steps>
+  <Step title="Clone repository">
+    ```bash
+    git clone https://github.com/FreeTAKTeam/FreeTakServer.git
+    cd FreeTakServer
+    ```
+  </Step>
+
+  <Step title="Install in editable mode">
+    ```bash
+    # Create virtual environment
+    python3.11 -m venv venv
+    source venv/bin/activate
+
+    # Install in editable mode
+    pip install -e .
+
+    # Or install with extras
+    pip install -e ".[ui,dev]"
+    ```
+  </Step>
+
+  <Step title="Run from source">
+    ```bash
+    python -m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP
+    ```
+  </Step>
+</Steps>
+
+## Dependencies
+
+FreeTAKServer automatically installs these core dependencies:
+
+### Web framework
+
+```python
+Flask==3.0.2              # Web application framework
+Flask-Cors==4.0.0         # Cross-origin resource sharing
+Flask-HTTPAuth==4.8.0     # HTTP authentication
+Flask-Login==0.6.3        # User session management
+Flask-SocketIO==5.3.6     # WebSocket support
+Flask-SQLAlchemy==3.1.1   # Database ORM
+Flask-Classy==0.6.10      # Class-based views
+Werkzeug==3.0.1           # WSGI utilities
+```
+
+### Database and ORM
+
+```python
+SQLAlchemy==2.0.29        # SQL toolkit and ORM
+```
+
+### Data processing
+
+```python
+lxml                      # XML processing
+defusedxml==0.7.1         # Secure XML parsing
+xmltodict                 # XML to dict conversion
+protobuf==3.18.3          # Protocol buffers
+pykml==0.2.0              # KML generation
+```
+
+### Async and networking
+
+```python
+eventlet==0.36.1          # Concurrent networking
+python-socketio==5.11.1   # Socket.IO server
+python-engineio==4.9.0    # Engine.IO server
+pyzmq                     # ZeroMQ messaging
+```
+
+### Security and cryptography
+
+```python
+cryptography==36.0.2      # Cryptographic primitives
+pyOpenSSL==22.0.0         # OpenSSL wrapper
+bcrypt==3.1.7             # Password hashing
+PyJWT                     # JSON Web Tokens
+```
+
+### Geospatial
+
+```python
+geographiclib==1.52       # Geodesic calculations
+geopy==2.2.0              # Geocoding and distance
+```
+
+### Utilities
+
+```python
+tabulate==0.8.7           # Table formatting
+click==8.1.7              # Command-line interface
+colorama==0.4.4           # Colored terminal output
+PyYAML==6.0.1             # YAML parser
+ruamel.yaml==0.17.21      # Advanced YAML processing
+qrcode==7.3.1             # QR code generation
+pillow==9.3.0             # Image processing
+```
+
+### FTS-specific
+
+```python
+digitalpy>=0.3.13.7       # FTS framework layer
+opentelemetry-sdk         # Telemetry and tracing
+```
+
+<Tip>
+You don't need to install these manually. Pip handles all dependencies automatically.
+</Tip>
+
+## Platform-specific installation
+
+### Ubuntu/Debian
+
+Complete installation on Ubuntu:
+
+<Steps>
+  <Step title="Update system">
+    ```bash
+    sudo apt update && sudo apt upgrade -y
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    # Install Python 3.11 and development tools
+    sudo apt install python3.11 python3.11-dev python3.11-venv \
+                     python3-pip build-essential libssl-dev \
+                     libffi-dev libxml2-dev libxslt1-dev zlib1g-dev
+    ```
+  </Step>
+
+  <Step title="Install FreeTAKServer">
+    ```bash
+    pip3 install FreeTAKServer[ui]
+    ```
+  </Step>
+
+  <Step title="Configure firewall">
+    ```bash
+    # Allow FTS ports
+    sudo ufw allow 8087/tcp  # CoT Service
+    sudo ufw allow 8080/tcp  # Data Packages
+    sudo ufw allow 8443/tcp  # HTTPS Data Packages
+    sudo ufw allow 8089/tcp  # SSL CoT
+    sudo ufw allow 19023/tcp # REST API
+    sudo ufw enable
+    ```
+  </Step>
+</Steps>
+
+### Windows
+
+Complete installation on Windows:
+
+<Steps>
+  <Step title="Install Python">
+    1. Download Python 3.11 from [python.org](https://www.python.org/downloads/)
+    2. Run installer with "Add to PATH" checked
+    3. Open Command Prompt as Administrator
+  </Step>
+
+  <Step title="Install FreeTAKServer">
+    ```cmd
+    python -m pip install --upgrade pip
+    python -m pip install FreeTAKServer[ui]
+    ```
+  </Step>
+
+  <Step title="Configure Windows Firewall">
+    Open PowerShell as Administrator:
+
+    ```powershell
+    # Allow FTS ports
+    New-NetFirewallRule -DisplayName "FTS CoT Service" -Direction Inbound -LocalPort 8087 -Protocol TCP -Action Allow
+    New-NetFirewallRule -DisplayName "FTS Data Packages" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+    New-NetFirewallRule -DisplayName "FTS SSL CoT" -Direction Inbound -LocalPort 8089 -Protocol TCP -Action Allow
+    ```
+  </Step>
+
+  <Step title="Start FTS">
+    ```cmd
+    python -m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP
+    ```
+
+    <Warning>
+    Use Command Prompt, not PowerShell. PowerShell can cause issues with FTS.
+    </Warning>
+  </Step>
+</Steps>
+
+### RHEL/CentOS
+
+Complete installation on RHEL-based systems:
+
+<Steps>
+  <Step title="Install EPEL repository">
+    ```bash
+    # RHEL 8/9
+    sudo dnf install epel-release
+    sudo dnf update
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    sudo dnf install python3.11 python3.11-devel gcc \
+                     openssl-devel libffi-devel libxml2-devel \
+                     libxslt-devel zlib-devel
+    ```
+  </Step>
+
+  <Step title="Install FreeTAKServer">
+    ```bash
+    pip3.11 install FreeTAKServer[ui]
+    ```
+  </Step>
+
+  <Step title="Configure firewalld">
+    ```bash
+    # Allow FTS ports
+    sudo firewall-cmd --permanent --add-port=8087/tcp
+    sudo firewall-cmd --permanent --add-port=8080/tcp
+    sudo firewall-cmd --permanent --add-port=8089/tcp
+    sudo firewall-cmd --permanent --add-port=19023/tcp
+    sudo firewall-cmd --reload
+    ```
+  </Step>
+</Steps>
+
+### macOS
+
+Complete installation on macOS:
+
+<Steps>
+  <Step title="Install Homebrew">
+    If not already installed:
+
+    ```bash
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    ```
+  </Step>
+
+  <Step title="Install Python 3.11">
+    ```bash
+    brew install python@3.11
+    brew link python@3.11
+    ```
+  </Step>
+
+  <Step title="Install FreeTAKServer">
+    ```bash
+    pip3.11 install FreeTAKServer[ui]
+    ```
+  </Step>
+
+  <Step title="Configure firewall (if enabled)">
+    If macOS firewall is enabled, allow FTS in:
+    **System Preferences → Security & Privacy → Firewall → Firewall Options**
+  </Step>
+</Steps>
+
+## Running as a system service
+
+For production deployments, run FTS as a system service that starts automatically.
+
+### Linux systemd service
+
+<Steps>
+  <Step title="Create service file">
+    Create `/etc/systemd/system/freetakserver.service`:
+
+    ```ini
+    [Unit]
+    Description=FreeTAKServer
+    After=network.target
+
+    [Service]
+    Type=simple
+    User=fts
+    WorkingDirectory=/home/fts
+    ExecStart=/usr/bin/python3.11 -m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP
+    Restart=on-failure
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+    Replace `YOUR_IP` with your server's IP address.
+  </Step>
+
+  <Step title="Create FTS user">
+    ```bash
+    # Create dedicated user
+    sudo useradd -r -s /bin/false fts
+
+    # Create home directory
+    sudo mkdir -p /home/fts
+    sudo chown fts:fts /home/fts
+    ```
+  </Step>
+
+  <Step title="Enable and start service">
+    ```bash
+    # Reload systemd
+    sudo systemctl daemon-reload
+
+    # Enable service to start on boot
+    sudo systemctl enable freetakserver
+
+    # Start service
+    sudo systemctl start freetakserver
+
+    # Check status
+    sudo systemctl status freetakserver
+    ```
+  </Step>
+
+  <Step title="View logs">
+    ```bash
+    # Follow logs in real-time
+    sudo journalctl -u freetakserver -f
+
+    # View recent logs
+    sudo journalctl -u freetakserver -n 100
+    ```
+  </Step>
+</Steps>
+
+### Windows service
+
+To run FTS as a Windows service:
+
+<Steps>
+  <Step title="Install NSSM">
+    Download and install NSSM (Non-Sucking Service Manager):
+    [nssm.cc/download](https://nssm.cc/download)
+  </Step>
+
+  <Step title="Create service">
+    Open Command Prompt as Administrator:
+
+    ```cmd
+    nssm install FreeTAKServer
+    ```
+
+    Configure in the GUI:
+    - **Path**: `C:\Python311\python.exe`
+    - **Startup directory**: `C:\FTS`
+    - **Arguments**: `-m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP`
+  </Step>
+
+  <Step title="Start service">
+    ```cmd
+    nssm start FreeTAKServer
+    ```
+  </Step>
+</Steps>
+
+## Updating FreeTAKServer
+
+To update to the latest version:
+
+```bash
+# Stop FTS if running
+sudo systemctl stop freetakserver  # Linux
+
+# Update via pip
+pip3 install --upgrade FreeTAKServer
+
+# Restart FTS
+sudo systemctl start freetakserver  # Linux
+```
+
+<Info>
+Subscribe to the [PyPI RSS feed](https://pypi.org/rss/project/freetakserver/releases.xml) to be notified of new releases.
+</Info>
+
+## Verifying installation
+
+After installation, verify everything is working:
+
+<Steps>
+  <Step title="Check Python version">
+    ```bash
+    python3 --version
+    # Should show Python 3.11.x
+    ```
+  </Step>
+
+  <Step title="Check FreeTAKServer version">
+    ```bash
+    pip3 show FreeTAKServer | grep Version
+    ```
+  </Step>
+
+  <Step title="Test startup">
+    ```bash
+    python3 -m FreeTAKServer.controllers.services.FTS --help
+    ```
+
+    Should display command-line options without errors.
+  </Step>
+
+  <Step title="Check ports">
+    After starting FTS, verify ports are listening:
+
+    ```bash
+    # Linux/macOS
+    sudo netstat -tuln | grep -E '8087|8080|19023'
+
+    # Windows
+    netstat -an | findstr "8087 8080 19023"
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="pip install fails with compiler errors">
+    Install build dependencies:
+
+    **Ubuntu/Debian:**
+    ```bash
+    sudo apt install build-essential python3.11-dev libssl-dev libffi-dev
+    ```
+
+    **RHEL/CentOS:**
+    ```bash
+    sudo dnf install gcc python3.11-devel openssl-devel libffi-devel
+    ```
+
+    **macOS:**
+    ```bash
+    xcode-select --install
+    ```
+  </Accordion>
+
+  <Accordion title="ModuleNotFoundError when starting FTS">
+    Ensure you're using the correct Python version:
+
+    ```bash
+    # Check which Python installed FTS
+    pip3 show FreeTAKServer
+
+    # Use that Python version to run FTS
+    python3.11 -m FreeTAKServer.controllers.services.FTS -DataPackageIP YOUR_IP
+    ```
+  </Accordion>
+
+  <Accordion title="Permission denied errors">
+    **Linux:**
+    ```bash
+    # Install for current user only
+    pip3 install --user FreeTAKServer
+
+    # Or use virtual environment (recommended)
+    python3.11 -m venv venv
+    source venv/bin/activate
+    pip install FreeTAKServer
+    ```
+
+    **Windows:**
+    Run Command Prompt as Administrator.
+  </Accordion>
+
+  <Accordion title="SSL/TLS errors during installation">
+    Update pip and try again:
+
+    ```bash
+    pip3 install --upgrade pip setuptools wheel
+    pip3 install --upgrade certifi
+    pip3 install FreeTAKServer
+    ```
+  </Accordion>
+
+  <Accordion title="lxml installation fails">
+    Install XML development libraries:
+
+    **Ubuntu/Debian:**
+    ```bash
+    sudo apt install libxml2-dev libxslt1-dev
+    ```
+
+    **RHEL/CentOS:**
+    ```bash
+    sudo dnf install libxml2-devel libxslt-devel
+    ```
+
+    **macOS:**
+    ```bash
+    brew install libxml2 libxslt
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Follow the quick start guide to get FTS running
+  </Card>
+
+  <Card title="Configuration" icon="gear" href="/configuration/main-config">
+    Configure ports, SSL, and advanced options
+  </Card>
+
+  <Card title="SSL setup" icon="lock" href="/guides/ssl-configuration">
+    Set up SSL encryption for secure communications
+  </Card>
+
+  <Card title="Docker deployment" icon="server" href="/guides/docker-deployment">
+    Deploy FTS in production with Docker
+  </Card>
+</CardGroup>

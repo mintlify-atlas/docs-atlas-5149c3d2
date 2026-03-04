@@ -1,0 +1,401 @@
+---
+title: Track Manager
+description: Component for tracking entities and managing situational awareness data
+---
+
+## Overview
+
+The Track Manager component is responsible for managing entity tracking and situational awareness data within FreeTAKServer. It provides functionality for tracking positions, exporting track data to external servers, and searching track information across the TAK ecosystem.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/components/extended/track_manager/
+├── track_manager_facade.py        # Public interface
+├── controllers/
+│   ├── track_manager_general_controller.py
+│   ├── track_manager_controller.py
+│   ├── track_manager_persistence.py
+│   └── track_manager_sender_controller.py
+├── domain/
+│   ├── _event.py
+│   ├── _component_property.py
+│   └── model_constants/
+│       └── ComponentPropertyVariables.py
+├── configuration/
+│   ├── track_manager_constants.py
+│   ├── model_definitions/
+│   └── business_rules/
+└── base/
+    ├── track_manager_action_mapper.py
+    └── track_manager_domain.py
+```
+
+### Key Classes
+
+#### TrackManagerFacade
+
+**Location:** `FreeTAKServer/components/extended/track_manager/track_manager_facade.py:9`
+
+```python
+class TrackManagerFacade(DefaultFacade):
+    def __init__(self):
+        # Track export functionality
+        self.track_export_to_server = TrackManagerGeneralController()
+        
+        # Track search functionality
+        self.track_search_server = TrackManagerGeneralController()
+```
+
+**Purpose:**
+- Provides public interface for track management operations
+- Isolates internal complexity from external callers
+- Routes requests to appropriate controllers
+
+#### TrackManagerGeneralController
+
+**Location:** `FreeTAKServer/components/extended/track_manager/controllers/track_manager_general_controller.py:8`
+
+```python
+class TrackManagerGeneralController(Controller):
+    def __init__(self, request, response, sync_action_mapper, configuration):
+        super().__init__(request, response, sync_action_mapper, configuration)
+    
+    def serialize_track_manager(self, **kwargs):
+        """Serialize the component to a given format"""
+        response = self.execute_sub_action(
+            self.request.get_value("model_object_parser")
+        )
+        self.response.set_value(
+            "serialized_message", response.get_value("serialized_message")
+        )
+```
+
+## Core Functionality
+
+### Track Export
+
+The Track Manager supports exporting track data to external servers for:
+
+- Inter-server track sharing
+- Backup and archival
+- Integration with external systems
+- Multi-server deployments
+
+**Usage:**
+
+```python
+# Export tracks to external server
+track_manager.track_export_to_server.execute("export",
+    destination_server="backup-server-001",
+    track_uids=["track-123", "track-456"],
+    time_range={
+        "start": "2024-03-04T00:00:00Z",
+        "end": "2024-03-04T23:59:59Z"
+    },
+    export_format="cot"
+)
+```
+
+### Track Search
+
+Search functionality enables querying track data based on various criteria:
+
+**Search Parameters:**
+- UID
+- Callsign
+- Time range
+- Geographic bounds
+- Team/group membership
+- Track type
+
+**Usage:**
+
+```python
+# Search for tracks
+track_manager.track_search_server.execute("search",
+    search_criteria={
+        "callsign": "Alpha*",
+        "team": "Blue",
+        "time_range": {
+            "start": "2024-03-04T12:00:00Z",
+            "end": "2024-03-04T18:00:00Z"
+        },
+        "geographic_bounds": {
+            "north": 45.0,
+            "south": 35.0,
+            "east": -70.0,
+            "west": -80.0
+        }
+    }
+)
+
+results = response.get_value("search_results")
+```
+
+### Track Storage and Persistence
+
+**Controller:** `TrackManagerPersistence`
+
+Manages persistent storage of track data:
+
+```python
+# Track data stored includes:
+# - Entity UID
+# - Callsign
+# - Position history
+# - Timestamps
+# - Type/affiliation
+# - Team membership
+# - Status information
+```
+
+### Track Serialization
+
+The component supports multiple serialization formats:
+
+**XML (CoT):**
+```python
+# Serialize track to CoT XML
+request.set_value("model_object_parser", "xml")
+response = track_manager.serialize_track_manager()
+cot_xml = response.get_value("serialized_message")
+```
+
+**JSON:**
+```python
+# Serialize track to JSON
+request.set_value("model_object_parser", "json")
+response = track_manager.serialize_track_manager()
+track_json = response.get_value("serialized_message")
+```
+
+## Track Data Model
+
+### Event Model
+
+**Location:** `FreeTAKServer/components/extended/track_manager/domain/_event.py`
+
+Represents track position events:
+
+```python
+class Event:
+    uid: str              # Unique identifier
+    type: str             # CoT event type
+    time: datetime        # Event timestamp
+    start: datetime       # Validity start
+    stale: datetime       # Validity end
+    how: str              # How the position was determined
+    point: Point          # Geographic location
+    detail: Detail        # Additional details
+```
+
+### Component Properties
+
+**Location:** `FreeTAKServer/components/extended/track_manager/domain/_component_property.py`
+
+Defines track-specific properties and metadata.
+
+## Integration with Services
+
+### Service Manager Integration
+
+Track Manager integrates with the Service Manager for:
+
+```python
+# Track flow:
+# 1. Client sends position update (CoT)
+# 2. Service Manager receives update
+# 3. Track Manager processes and stores
+# 4. Track distributed to subscribers
+# 5. Historical track data maintained
+```
+
+### Database Integration
+
+Tracks are persisted to the database for:
+- Historical playback
+- Track analysis
+- Search capabilities
+- Situational awareness reconstruction
+
+## Advanced Features
+
+### Track History
+
+Maintains historical track data:
+
+```python
+# Get track history
+track_history = track_manager.get_track_history(
+    uid="entity-123",
+    time_range={
+        "start": "2024-03-04T00:00:00Z",
+        "end": "2024-03-04T23:59:59Z"
+    },
+    max_points=1000
+)
+
+# Returns:
+# [
+#   {"time": "...", "lat": 40.7128, "lon": -74.0060, ...},
+#   {"time": "...", "lat": 40.7130, "lon": -74.0062, ...},
+#   ...
+# ]
+```
+
+### Track Filtering
+
+Filter tracks based on criteria:
+
+```python
+# Filter by team
+blue_team_tracks = track_manager.filter_tracks(
+    team="Blue"
+)
+
+# Filter by type
+ground_units = track_manager.filter_tracks(
+    type_prefix="a-f-G"  # Ground friendly
+)
+
+# Filter by status
+active_tracks = track_manager.filter_tracks(
+    is_stale=False
+)
+```
+
+### Track Aggregation
+
+Aggregate track data for analysis:
+
+```python
+# Get track statistics
+stats = track_manager.get_track_statistics(
+    time_range={
+        "start": "2024-03-04T00:00:00Z",
+        "end": "2024-03-04T23:59:59Z"
+    }
+)
+
+# Returns:
+# {
+#   "total_tracks": 150,
+#   "active_tracks": 45,
+#   "by_team": {"Blue": 30, "Red": 15},
+#   "by_type": {"ground": 25, "air": 20}
+# }
+```
+
+## Complete Usage Example
+
+```python
+from FreeTAKServer.components.extended.track_manager.track_manager_facade import TrackManagerFacade
+
+# 1. Initialize Track Manager
+track_manager = TrackManagerFacade()
+
+# 2. Search for specific tracks
+request.set_value("search_criteria", {
+    "callsign": "Alpha-1",
+    "time_range": {
+        "start": "2024-03-04T08:00:00Z",
+        "end": "2024-03-04T16:00:00Z"
+    }
+})
+track_manager.track_search_server.execute("search")
+search_results = response.get_value("search_results")
+
+# 3. Export tracks to backup server
+track_uids = [result["uid"] for result in search_results]
+request.set_value("destination_server", "backup-001")
+request.set_value("track_uids", track_uids)
+request.set_value("export_format", "cot")
+track_manager.track_export_to_server.execute("export")
+
+# 4. Serialize track data
+request.set_value("model_object", search_results[0])
+request.set_value("model_object_parser", "json")
+response = track_manager.serialize_track_manager()
+track_json = response.get_value("serialized_message")
+
+# 5. Get track history
+track_history = track_manager.get_track_history(
+    uid=track_uids[0],
+    time_range={
+        "start": "2024-03-04T08:00:00Z",
+        "end": "2024-03-04T16:00:00Z"
+    }
+)
+```
+
+## Configuration
+
+**File:** `track_manager_constants.py`
+
+Configuration options:
+- Track retention period
+- Export destinations
+- Search index configuration
+- Serialization defaults
+
+## Best Practices
+
+1. **Retention Policy**: Configure appropriate track retention periods
+2. **Search Indexing**: Ensure search indices are optimized
+3. **Export Scheduling**: Schedule regular track exports for backup
+4. **Performance**: Use time-based filtering to limit result sets
+5. **Cleanup**: Regularly purge old track data based on retention policy
+
+## Performance Considerations
+
+### Database Optimization
+
+- Index on UID, callsign, and timestamp fields
+- Partition historical data by time period
+- Archive old tracks to separate storage
+
+### Search Optimization
+
+- Use geographic bounds to limit search area
+- Apply time range filters to reduce dataset
+- Limit result set size for large queries
+
+### Export Optimization
+
+- Batch export operations
+- Use incremental exports when possible
+- Compress export data for transmission
+
+## Monitoring
+
+Track key metrics:
+- Active track count
+- Track update frequency
+- Search query performance
+- Export success rate
+- Database storage usage
+
+## Error Handling
+
+```python
+try:
+    track_manager.track_search_server.execute("search",
+        search_criteria=criteria
+    )
+    results = response.get_value("search_results")
+    if not results:
+        logger.info("No tracks found matching criteria")
+except Exception as e:
+    logger.error(f"Track search failed: {e}")
+    # Fallback to broader search or cached results
+```
+
+## Related Components
+
+- [CoT Manager](/components/cot-manager) - CoT message processing
+- [Emergency](/components/emergency) - Emergency entity tracking
+- [Federation](/components/federation) - Cross-server track sharing
+- [Mission](/components/mission) - Mission-based track filtering

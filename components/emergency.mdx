@@ -1,0 +1,404 @@
+---
+title: Emergency
+description: Component for emergency alert management and response coordination
+---
+
+## Overview
+
+The Emergency component provides comprehensive emergency alert management for FreeTAKServer. It handles the creation, broadcasting, and cancellation of emergency alerts, enabling rapid response coordination across the TAK ecosystem. The component includes geographic filtering, automated notifications, and integration with other FreeTAKServer components.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/components/extended/emergency/
+├── emergency_facade.py            # Public interface
+├── controllers/
+│   ├── emergency_general_controller.py
+│   ├── emergency_on_controller.py
+│   ├── emergency_off_controller.py
+│   ├── emergency_persistence.py
+│   └── emergency_sender_controller.py
+├── persistence/
+├── domain/
+├── configuration/
+│   └── emergency_constants.py
+└── base/
+```
+
+### Key Classes
+
+#### Emergency Facade
+
+**Location:** `FreeTAKServer/components/extended/emergency/emergency_facade.py:32`
+
+```python
+class Emergency(DefaultFacade):
+    def __init__(
+        self,
+        sync_action_mapper,
+        request,
+        response,
+        configuration,
+        emergency_action_mapper=None,
+        tracing_provider_instance=None,
+    ):
+        self.persistency_controller = EmergencyPersistence(...)
+        self.general_controller = EmergencyGeneralController(...)
+        self.on_controller = EmergencyOnController(...)
+        self.off_controller = EmergencyOffController(...)
+        self.sender_controller = EmergencySenderController(...)
+```
+
+**Public Methods:**
+- `create_emergency_alert()` - Trigger new emergency
+- `cancel_emergency_alert()` - Cancel active emergency
+- `get_all_emergencies()` - Retrieve all emergencies
+- `broadcast_emergency()` - Broadcast to all users
+- `send_emergencies_to_client()` - Send to specific client
+
+#### EmergencyOnController
+
+**Location:** `FreeTAKServer/components/extended/emergency/controllers/emergency_on_controller.py:28`
+
+Handles emergency activation logic:
+
+```python
+class EmergencyOnController(DefaultBusinessRuleController):
+    def __init__(
+        self,
+        request,
+        response,
+        sync_action_mapper,
+        configuration,
+        emergency_action_mapper,
+    ):
+        super().__init__(
+            business_rules_path=EMERGENCY_ON_BUSINESS_RULES_PATH,
+            request=request,
+            response=response,
+            configuration=configuration,
+            action_mapper=sync_action_mapper,
+            internal_action_mapper=emergency_action_mapper,
+        )
+        self.emergency_general_controller = EmergencyGeneralController(...)
+```
+
+## Core Functionality
+
+### Creating Emergency Alerts
+
+**Method:** `create_emergency_alert()`  
+**Location:** `emergency_facade.py:113`
+
+```python
+@DefaultFacade.public
+def create_emergency_alert(self, *args, **kwargs):
+    """Create an emergency alert"""
+    self.on_controller.evaluate_request(*args, **kwargs)
+```
+
+The emergency creation process:
+
+1. **Parse Emergency Data**  
+   **Location:** `emergency_on_controller.py:77`
+   
+   ```python
+   def parse_emergency_on(self, config_loader, tracer, **kwargs):
+       # Create model object outline
+       self.request.set_value("object_class_name", BASE_OBJECT_NAME)
+       configuration = config_loader.find_configuration(EMERGENCY_ALERT)
+       self.request.set_value("configuration", configuration)
+       self.request.set_value("extended_domain", {"emergency": emergency})
+       
+       # Parse to node
+       response = self.execute_sub_action("CreateNode")
+       response = self.execute_sub_action("DictToNode")
+   ```
+
+2. **Add Emergency Remark**  
+   **Location:** `emergency_on_controller.py:69`
+   
+   ```python
+   def add_call_police_remark(self, tracer, **kwargs):
+       self.request.get_value("model_object").detail.remarks.text = "CALL 911 NOW"
+   ```
+
+3. **Filter by Distance**  
+   **Location:** `emergency_on_controller.py:114`
+   
+   ```python
+   self.emergency_general_controller.filter_by_distance(
+       response.get_value("model_object")
+   )
+   ```
+
+4. **Broadcast to Recipients**
+
+**Usage Example:**
+
+```python
+# Create emergency alert
+emergency.create_emergency_alert(
+    model_object=emergency_cot,
+    config_loader=config,
+    tracer=tracer
+)
+```
+
+### Geographic Filtering
+
+The Emergency component includes distance-based filtering to notify only nearby users:
+
+```python
+def filter_by_distance(self, emergency_event):
+    """
+    Filter recipients based on distance from emergency location
+    Uses geopy for distance calculation
+    """
+    # Get emergency coordinates
+    emergency_location = (emergency_event.point.lat, emergency_event.point.lon)
+    
+    # Filter users within range
+    for user in all_users:
+        user_location = (user.lat, user.lon)
+        if distance.distance(emergency_location, user_location).km < max_distance:
+            recipients.append(user)
+```
+
+### Canceling Emergency Alerts
+
+**Method:** `cancel_emergency_alert()`  
+**Location:** `emergency_facade.py:123`
+
+```python
+@DefaultFacade.public
+def cancel_emergency_alert(self, *args, **kwargs):
+    self.off_controller.evaluate_request(*args, **kwargs)
+```
+
+**Usage Example:**
+
+```python
+# Cancel an active emergency
+emergency.cancel_emergency_alert(
+    emergency_uid="emergency-123",
+    cancel_reason="Resolved",
+    client_uid="user-001"
+)
+```
+
+### Retrieving Emergencies
+
+**Method:** `get_all_emergencies()`  
+**Location:** `emergency_facade.py:118`
+
+```python
+# Get all active and past emergencies
+emergency.get_all_emergencies()
+emergencies = response.get_value("emergencies")
+```
+
+### Broadcasting Emergencies
+
+**Method:** `broadcast_emergency()`  
+**Location:** `emergency_facade.py:127`
+
+```python
+# Broadcast to all connected users
+emergency.broadcast_emergency(
+    emergency_uid="emergency-123"
+)
+```
+
+**Method:** `send_emergencies_to_client()`  
+**Location:** `emergency_facade.py:131`
+
+```python
+# Send to specific client
+emergency.send_emergencies_to_client(
+    client_uid="user-001",
+    emergency_uids=["emergency-123", "emergency-456"]
+)
+```
+
+## Emergency Types
+
+The component supports standard TAK emergency types:
+
+- **911 Alert**: General emergency requiring immediate response
+- **Ring The Bell**: Alert without specific emergency type
+- **Troops In Contact**: Combat emergency
+- **Custom**: User-defined emergency types
+
+## Emergency CoT Structure
+
+Emergency alerts are represented as CoT events:
+
+```xml
+<event version="2.0" uid="emergency-123" type="b-a-o-tbl" how="h-g-i-g-o">
+    <point lat="40.7128" lon="-74.0060" hae="10.0" ce="9999999.0" le="9999999.0" />
+    <detail>
+        <emergency>
+            <type>911 Alert</type>
+        </emergency>
+        <contact callsign="User-001" />
+        <remarks>CALL 911 NOW</remarks>
+        <link uid="user-001" relation="p-p" type="a-f-G-U-C" />
+    </detail>
+</event>
+```
+
+## Business Rules
+
+The Emergency component uses business rules for:
+
+**Configuration:** `EMERGENCY_ON_BUSINESS_RULES_PATH`
+
+1. **Remark Addition**: Automatically adds "CALL 911 NOW" to alerts
+2. **Distance Filtering**: Limits recipients to those within range
+3. **Validation**: Validates user permissions and locations
+4. **Routing**: Determines appropriate distribution channels
+
+## Persistence
+
+**Controller:** `EmergencyPersistence`
+
+Stores emergency records for:
+- Audit trail
+- Historical analysis
+- After-action review
+- Legal documentation
+
+```python
+# Emergency records include:
+# - Emergency UID
+# - Creator UID
+# - Timestamp
+# - Location
+# - Type
+# - Status (active/cancelled)
+# - Recipients
+```
+
+## Integration with Services
+
+### Service Manager Integration
+
+Emergencies are routed through the Service Manager:
+
+```python
+# Emergency flow:
+# 1. Emergency created via API/CoT
+# 2. Emergency component parses and validates
+# 3. Business rules applied (distance filter, remarks)
+# 4. Recipients identified
+# 5. Service Manager broadcasts to TCP/SSL services
+# 6. Clients receive emergency notification
+```
+
+### CoT Integration
+
+Emergency alerts are CoT messages with:
+- Event type: `b-a-o-tbl` (emergency beacon)
+- How: `h-g-i-g-o` (user generated)
+- Emergency detail element
+
+## Complete Workflow Example
+
+```python
+from FreeTAKServer.components.extended.emergency import Emergency
+from FreeTAKServer.core.domain.node import Node
+
+# 1. Initialize component
+emergency = Emergency(
+    sync_action_mapper=action_mapper,
+    request=request,
+    response=response,
+    configuration=config,
+    emergency_action_mapper=emergency_mapper
+)
+
+# 2. Create emergency event
+emergency_cot = Node()
+emergency_cot.uid = "emergency-001"
+emergency_cot.type = "b-a-o-tbl"
+emergency_cot.point.lat = 40.7128
+emergency_cot.point.lon = -74.0060
+emergency_cot.detail.emergency.type = "911 Alert"
+emergency_cot.detail.contact.callsign = "Officer-123"
+
+# 3. Trigger emergency
+request.set_value("model_object", emergency_cot)
+request.set_value("source_format", "node")
+emergency.create_emergency_alert(
+    config_loader=config_loader,
+    tracer=tracer
+)
+
+# 4. Get broadcast recipients
+recipients = response.get_value("recipients")
+
+# 5. Broadcast to users
+emergency.broadcast_emergency(
+    emergency_uid="emergency-001"
+)
+
+# 6. Later: Cancel emergency
+emergency.cancel_emergency_alert(
+    emergency_uid="emergency-001",
+    client_uid="Officer-123"
+)
+
+# 7. Retrieve for records
+all_emergencies = emergency.get_all_emergencies()
+```
+
+## Configuration
+
+**File:** `emergency_constants.py`
+
+Key constants:
+- `EMERGENCY_ON_BUSINESS_RULES_PATH` - Business rules configuration
+- `EMERGENCY_ALERT` - Alert configuration
+- `BASE_OBJECT_NAME` - Base object type ("Event")
+- `ACTION_MAPPING_PATH` - External action mappings
+- `INTERNAL_ACTION_MAPPING_PATH` - Internal action mappings
+
+## Best Practices
+
+1. **Geographic Filtering**: Configure appropriate distance thresholds
+2. **Validation**: Validate user locations before filtering
+3. **Logging**: Log all emergency events for audit trail
+4. **Testing**: Test emergency workflows regularly
+5. **Cancellation**: Always cancel resolved emergencies
+6. **Remarks**: Use clear, actionable remarks in emergency messages
+
+## Error Handling
+
+```python
+try:
+    emergency.create_emergency_alert(
+        model_object=emergency_cot,
+        config_loader=config,
+        tracer=tracer
+    )
+except Exception as e:
+    logger.fatal(f"Emergency creation failed: {e}")
+    # Fallback: Direct broadcast without filtering
+```
+
+## Monitoring and Analytics
+
+Track emergency metrics:
+- Emergency frequency by type
+- Response times
+- Geographic distribution
+- User response patterns
+
+## Related Components
+
+- [Mission](/components/mission) - Emergency context in missions
+- [CoT Manager](/components/cot-manager) - CoT message routing
+- [Track Manager](/components/track-manager) - User location tracking

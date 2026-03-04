@@ -1,80 +1,353 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get FreeTAKServer running in minutes and connect your first client
 ---
 
-## Get started in three steps
+This guide will help you install FreeTAKServer, start the server, and connect your first ATAK client in under 10 minutes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
+
+- Python 3.11 or higher installed
+- Pip package manager
+- Command line access
+- Network connectivity
+- An ATAK, WinTAK, or iTAK client for testing
+
+<Note>
+For detailed system requirements and platform-specific dependencies, see the [installation guide](/installation).
+</Note>
+
+## Installation
+
+<Steps>
+  <Step title="Install FreeTAKServer via pip">
+    Install the latest version of FreeTAKServer from PyPI:
+
+    <CodeGroup>
+    ```bash Linux/macOS
+    pip3 install FreeTAKServer
+    ```
+
+    ```bash Windows
+    python -m pip install FreeTAKServer
+    ```
+    </CodeGroup>
+
+    This will install FreeTAKServer and all required dependencies including Flask, SQLAlchemy, lxml, and the DigitalPy framework.
+
+    <Tip>
+    Add `[ui]` to install the optional web UI: `pip3 install FreeTAKServer[ui]`
+    </Tip>
+  </Step>
+
+  <Step title="Verify installation">
+    Check that FreeTAKServer is installed correctly:
+
+    ```bash
+    python3 -m FreeTAKServer.controllers.services.FTS --help
+    ```
+
+    You should see the help output with available command-line options.
+  </Step>
+
+  <Step title="Check your IP address">
+    Find your IP address to configure the data package service:
+
+    <CodeGroup>
+    ```bash Linux/macOS
+    # Internal network IP
+    ip addr show | grep "inet " | grep -v 127.0.0.1
+
+    # Or use hostname
+    hostname -I
+    ```
+
+    ```bash Windows
+    ipconfig
+    ```
+    </CodeGroup>
+
+    Note your IP address for the next step (e.g., `192.168.1.100`).
+
+    <Warning>
+    Use your machine's actual IP address, not `localhost` or `127.0.0.1`, so TAK clients can download data packages.
+    </Warning>
+  </Step>
+</Steps>
+
+## Starting the server
+
+<Steps>
+  <Step title="Start FTS with default configuration">
+    Launch FreeTAKServer with your IP address:
+
+    <CodeGroup>
+    ```bash Linux/macOS
+    python3 -m FreeTAKServer.controllers.services.FTS -DataPackageIP [YOUR_IP]
+    ```
+
+    ```bash Windows (Command Prompt)
+    python -m FreeTAKServer.controllers.services.FTS -DataPackageIP [YOUR_IP]
+    ```
+    </CodeGroup>
+
+    Replace `[YOUR_IP]` with your actual IP address from step 3.
+
+    **Example:**
+    ```bash
+    python3 -m FreeTAKServer.controllers.services.FTS -DataPackageIP 192.168.1.100
+    ```
+
+    <Info>
+    On first run, FTS will create configuration files in your home directory under `.FreeTAKServer/`.
+    </Info>
+  </Step>
+
+  <Step title="Wait for services to start">
+    FTS will start multiple services. Look for these startup messages:
+
+    ```
+    Starting CoT Service on 0.0.0.0:8087
+    Starting TCP Data Package Service on 0.0.0.0:8080
+    Starting REST API Service on 0.0.0.0:19023
+    CoT Service Started
+    ```
+
+    When you see these messages, the server is ready to accept connections.
+  </Step>
+
+  <Step title="Verify services are running">
+    By default, FTS starts these services:
+
+    | Service | Port | Protocol | Purpose |
+    |---------|------|----------|----------|
+    | TCP CoT Service | 8087 | TCP | Main client connections |
+    | HTTP Data Package Service | 8080 | HTTP | Data package downloads |
+    | REST API Service | 19023 | HTTP | API endpoints |
+
+    <Tip>
+    Leave the terminal window open. Closing it will stop the server.
+    </Tip>
+  </Step>
+</Steps>
+
+## Connecting your first client
+
+Now that FTS is running, let's connect an ATAK client.
+
+<Steps>
+  <Step title="Configure ATAK connection">
+    On your ATAK device:
+
+    1. Open ATAK
+    2. Tap the menu icon (three lines) in the top-right
+    3. Select **Settings** → **Network Preferences** → **Network Connections**
+    4. Tap **Add** to create a new connection
+  </Step>
+
+  <Step title="Enter server details">
+    Configure the connection with these settings:
+
+    | Setting | Value |
+    |---------|-------|
+    | **Description** | FreeTAKServer |
+    | **Address** | Your server IP (e.g., `192.168.1.100`) |
+    | **Port** | `8087` |
+    | **Protocol** | `TCP` |
+
+    Leave other settings at their defaults.
+  </Step>
+
+  <Step title="Connect to the server">
+    1. Save the connection configuration
+    2. Tap the connection to enable it
+    3. Look for **Connected** status
+
+    <Note>
+    In ATAK, connected clients appear on the map. You should see your own position marker once connected.
+    </Note>
+  </Step>
+
+  <Step title="Test the connection">
+    Verify the connection is working:
+
+    **In ATAK:**
+    - Your callsign should appear on the map
+    - Drop a marker and it should persist on the server
+    - Check the chat - you should be able to send messages
+
+    **In the FTS terminal:**
+    You should see connection logs:
+    ```
+    Client connected from 192.168.1.50:54321
+    Received COT event from [CALLSIGN]
+    ```
+  </Step>
+</Steps>
+
+## Testing server functionality
+
+Try these features to verify FTS is working correctly:
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  <Accordion title="Send a chat message">
+    1. In ATAK, open the hamburger menu
+    2. Select **Chat** → **All Chat Rooms**
+    3. Send a message
+    4. If you have multiple clients connected, they should all receive the message
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+
+  <Accordion title="Drop a marker">
+    1. Long-press on the map to drop a marker
+    2. Add a name and remarks
+    3. Send the marker
+    4. The marker should be visible to all connected clients
+  </Accordion>
+
+  <Accordion title="Send a data package">
+    1. Take a photo with ATAK's Quick Pic tool
+    2. Send it to "All Chat Rooms" or a specific contact
+    3. Other clients should receive a notification and be able to download the image
+
+    <Warning>
+    Data packages require proper IP configuration. If downloads fail, verify you used your correct IP address (not localhost) when starting FTS.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Check REST API">
+    Test the REST API is accessible:
+
+    ```bash
+    curl http://YOUR_IP:19023/ManagePresence/getAll
+    ```
+
+    You should receive JSON data showing connected clients.
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+## Using the public test server
+
+If you want to test ATAK connectivity before setting up your own server, you can use the FreeTAKTeam public instance:
+
+<Steps>
+  <Step title="Download configuration">
+    Download the server configuration from:
+    [https://drive.google.com/file/d/1IK1LfPN13EWikHaMyOuDDwIerNGz-Wli/view](https://drive.google.com/file/d/1IK1LfPN13EWikHaMyOuDDwIerNGz-Wli/view)
+  </Step>
+
+  <Step title="Import in ATAK">
+    1. Transfer the `.pref` file to your device
+    2. In ATAK, go to **Settings** → **Import**
+    3. Select the configuration file
+    4. Enable the connection
+  </Step>
+
+  <Step title="Connect to public server">
+    The public server address is:
+    - **IP**: `137.184.101.250`
+    - **Port**: `8087`
+    - **Protocol**: TCP
+  </Step>
+</Steps>
+
+<Info>
+The public server is for testing only. Do not use it for sensitive or operational data.
+</Info>
+
+## Troubleshooting
 
 <AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Accordion title="ATAK won't connect">
+    **Check network connectivity:**
+    ```bash
+    # From client device, ping the server
+    ping YOUR_SERVER_IP
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    **Verify firewall rules:**
+    - Ensure port 8087 is open on your server
+    - Check firewall isn't blocking connections
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
+    **On Linux, allow the port:**
+    ```bash
+    sudo ufw allow 8087/tcp
+    sudo ufw allow 8080/tcp
+    ```
+  </Accordion>
+
+  <Accordion title="Data packages won't download">
+    This usually means the `-DataPackageIP` is incorrect.
+
+    **Solution:**
+    1. Stop FTS (Ctrl+C)
+    2. Restart with the correct IP address
+    3. Make sure you're using the IP address that clients can reach, not localhost
+
+    **For internet-accessible servers:**
+    Use your public IP address, not your local network IP.
+  </Accordion>
+
+  <Accordion title="Module not found error">
+    If you get `ModuleNotFoundError` when starting FTS:
+
+    ```bash
+    # Ensure FreeTAKServer is installed
+    pip3 list | grep FreeTAKServer
+
+    # Reinstall if needed
+    pip3 install --force-reinstall FreeTAKServer
+    ```
+  </Accordion>
+
+  <Accordion title="Port already in use">
+    If ports 8087 or 8080 are already in use:
+
+    **Find what's using the port:**
+    ```bash
+    # Linux/macOS
+    sudo lsof -i :8087
+
+    # Windows
+    netstat -ano | findstr :8087
+    ```
+
+    **Use different ports:**
+    You can specify custom ports when starting FTS (see [installation guide](/installation) for details).
+  </Accordion>
+
+  <Accordion title="WinTAK connection issues">
+    If WinTAK can't connect:
+
+    1. Try disabling the TAKChat plugin in WinTAK
+    2. Go to **Plugins** → **TAKChat** → **Disable**
+    3. Restart WinTAK and try connecting again
   </Accordion>
 </AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you have FTS running, explore these topics:
 
 <CardGroup cols={2}>
+  <Card title="Full installation guide" icon="download" href="/installation">
+    Learn about system services, SSL setup, and production deployment
+  </Card>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Card title="Configuration" icon="gear" href="/configuration/main-config">
+    Customize ports, enable SSL, and configure advanced features
+  </Card>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+  <Card title="Authentication" icon="users" href="/api/authentication">
+    Set up authentication and user accounts
+  </Card>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="REST API" icon="code" href="/api/overview">
+    Integrate FTS with your applications using the REST API
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+<Tip>
+Join the [FreeTAKServer Discord](https://discord.gg/VSukyY5wfD) to get help from the community and stay updated on new features.
+</Tip>

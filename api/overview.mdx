@@ -1,0 +1,230 @@
+---
+title: API Overview
+description: Overview of FreeTAKServer APIs including REST API, TAK API services, and CoT services
+---
+
+FreeTAKServer provides multiple API interfaces for interacting with the server and managing TAK (Team Awareness Kit) data. This page provides an overview of all available APIs, their purposes, and how to access them.
+
+## Available APIs
+
+FreeTAKServer exposes three primary API types:
+
+### REST API Service
+
+The REST API provides programmatic access to FreeTAKServer functionality including user management, geo-objects, emergencies, missions, and more.
+
+- **Port**: 19023 (default)
+- **Base URL**: `http://<server-ip>:19023/`
+- **Protocol**: HTTP/HTTPS
+- **Authentication**: Bearer Token (Flask-HTTPAuth)
+- **Response Format**: JSON
+
+### TAK API Service (HTTPS)
+
+The HTTPS TAK API service provides secure TAK protocol compatibility for ATAK/WinTAK/iTAK clients, implementing the Marti API specification.
+
+- **Port**: 8443 (default)
+- **Base URL**: `https://<server-ip>:8443/`
+- **Protocol**: HTTPS with mutual TLS
+- **Authentication**: Client certificate authentication
+- **Response Format**: XML/JSON
+
+### TAK API Service (HTTP)
+
+The HTTP TAK API service provides non-secure TAK protocol compatibility for development and testing.
+
+- **Port**: 8080 (default)
+- **Base URL**: `http://<server-ip>:8080/`
+- **Protocol**: HTTP
+- **Authentication**: Optional
+- **Response Format**: XML/JSON
+
+## CoT Services
+
+In addition to HTTP-based APIs, FreeTAKServer provides TCP/UDP streaming services for Cursor-on-Target (CoT) messages:
+
+### TCP CoT Service
+- **Port**: 8087 (default)
+- **Protocol**: TCP streaming
+- **Data Format**: CoT XML
+
+### SSL CoT Service
+- **Port**: 8089 (default)
+- **Protocol**: TLS/SSL encrypted TCP streaming
+- **Data Format**: CoT XML
+- **Authentication**: Client certificate required
+
+## Common API Endpoints
+
+### REST API Endpoints
+
+The REST API service provides the following major endpoint categories:
+
+#### Health Check
+```http
+GET /Alive
+```
+Returns server status.
+
+#### User Management
+- `GET /ManageSystemUser/getAll` - Retrieve all system users
+- `GET /ManageSystemUser/getSystemUser` - Get specific system user
+- `POST /ManageSystemUser/postSystemUser` - Create new system user
+- `PUT /ManageSystemUser/putSystemUser` - Update system user
+- `DELETE /ManageSystemUser/deleteSystemUser` - Remove system user
+
+#### Geo Objects
+- `GET /ManageGeoObject/getGeoObject` - Query geo objects by location
+- `POST /ManageGeoObject/postGeoObject` - Create new geo object
+- `PUT /ManageGeoObject/putGeoObject` - Update existing geo object
+- `GET /ManageGeoObject/GetRepeatedMessages` - Get repeated messages
+- `DELETE /ManageGeoObject/DeleteRepeatedMessage` - Delete repeated messages
+
+#### Emergency Management
+- `GET /ManageEmergency/getEmergency` - Retrieve active emergencies
+- `POST /ManageEmergency/postEmergency` - Create emergency alert
+- `DELETE /ManageEmergency/deleteEmergency` - Cancel emergency
+
+#### Presence Management
+- `POST /ManagePresence/postPresence` - Create presence marker
+- `PUT /ManagePresence/putPresence` - Update presence marker
+
+#### Missions
+- `GET /MissionTable` - Get all missions
+
+#### Video Streams
+- `GET /ManageVideoStream/getVideoStream` - Get video stream list
+- `POST /ManageVideoStream/postVideoStream` - Add video stream
+- `DELETE /ManageVideoStream/deleteVideoStream` - Remove video stream
+
+#### Chat
+- `POST /ManageChat/postChatToAll` - Send chat message to all users
+
+#### Sensors
+- `POST /Sensor/postDrone` - Post drone sensor data
+- `POST /Sensor/postSPI` - Post sensor point of interest
+
+### TAK API Endpoints
+
+Both HTTP and HTTPS TAK API services support the following Marti API endpoints:
+
+#### Version Information
+```http
+GET /Marti/api/version
+GET /Marti/api/version/config
+```
+
+#### Video Connection Manager
+```http
+GET /Marti/vcm
+POST /Marti/vcm
+```
+
+#### Missions
+```http
+GET /Marti/api/missions/<mission_id>
+GET /Marti/api/missions/exchecktemplates/changes
+```
+
+#### ExCheck (Execution Checklist)
+```http
+POST /Marti/api/excheck/checklist/
+GET /Marti/api/excheck/checklist/<checklistid>
+GET /Marti/api/excheck/template/<templateUid>/task/<taskUid>
+POST /Marti/api/excheck/template/<templateUid>/task/<taskUid>
+```
+
+<Note>
+The TAK API services use Flask blueprints to organize endpoints into logical groups: missions, excheck, citrap, enterprise_sync, and misc.
+</Note>
+
+## Service Architecture
+
+FreeTAKServer uses a distributed service architecture:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                 FreeTAKServer                       │
+├─────────────────────────────────────────────────────┤
+│  REST API Service (Port 19023)                      │
+│  ├─ Flask-HTTPAuth Bearer Token Authentication      │
+│  └─ JSON API for management operations              │
+├─────────────────────────────────────────────────────┤
+│  HTTPS TAK API Service (Port 8443)                  │
+│  ├─ Mutual TLS Client Certificate Authentication    │
+│  └─ Marti API Compatible Endpoints                  │
+├─────────────────────────────────────────────────────┤
+│  HTTP TAK API Service (Port 8080)                   │
+│  └─ Marti API Compatible Endpoints (Development)    │
+├─────────────────────────────────────────────────────┤
+│  SSL CoT Service (Port 8089)                        │
+│  └─ TLS/SSL TCP Streaming for CoT Messages          │
+├─────────────────────────────────────────────────────┤
+│  TCP CoT Service (Port 8087)                        │
+│  └─ Plain TCP Streaming for CoT Messages            │
+└─────────────────────────────────────────────────────┘
+```
+
+## Configuration
+
+API ports and settings are configurable through environment variables or the `MainConfig` class:
+
+```python
+# Default port configuration
+CoTServicePort: 8087          # TCP CoT Service
+SSLCoTServicePort: 8089       # SSL CoT Service  
+HTTPSTakAPIPort: 8443         # HTTPS TAK API
+HTTPTakAPIPort: 8080          # HTTP TAK API
+APIPort: 19023                # REST API Service
+```
+
+<Warning>
+The HTTP TAK API service (port 8080) does not enforce authentication and should only be used in development environments. Production deployments should use the HTTPS TAK API service (port 8443) with mutual TLS.
+</Warning>
+
+## Response Formats
+
+### REST API
+
+The REST API returns JSON responses with the following structure:
+
+**Success Response:**
+```json
+{
+  "message": "operation successful",
+  "data": { ... }
+}
+```
+
+**Error Response:**
+```json
+{
+  "message": "error description"
+}
+```
+
+### TAK API
+
+The TAK API services return XML or JSON responses depending on the endpoint, following the Marti API specification.
+
+## Rate Limiting
+
+Currently, FreeTAKServer does not implement rate limiting on API endpoints. Clients should implement their own rate limiting to avoid overwhelming the server.
+
+## WebSocket Support
+
+The REST API service includes WebSocket support for real-time updates:
+
+- **Endpoint**: WebSocket connection to REST API port
+- **Authentication**: Token-based via `authenticate` event
+- **Events**: `users`, `logs`, `serviceInfo`, `serverHealth`, `systemStatus`
+
+<Info>
+WebSocket connections require authentication using the server's configured `websocketkey` before any events can be accessed.
+</Info>
+
+## Next Steps
+
+- [Authentication](/api/authentication) - Learn about API authentication mechanisms
+- [REST API Reference](/api/rest/missions) - Detailed REST API endpoint documentation
+- [TAK API Reference](/api/tak/mission-api) - TAK API endpoint documentation

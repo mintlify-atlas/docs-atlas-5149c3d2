@@ -1,0 +1,414 @@
+---
+title: Enterprise Sync
+description: Core component for data synchronization, file storage, and content management
+---
+
+## Overview
+
+Enterprise Sync is a core component of FreeTAKServer that provides comprehensive data synchronization, file storage, and content management capabilities. It serves as the backbone for storing and retrieving various types of data including data packages, mission content, ExCheck templates, and other synchronized content across the TAK ecosystem.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/core/enterprise_sync/
+├── enterprise_sync_facade.py      # Public interface
+├── controllers/
+│   ├── enterprise_sync_general_controller.py
+│   ├── enterprise_sync_database_controller.py
+│   ├── enterprise_sync_filesystem_controller.py
+│   └── enterprise_sync_format_synchronization_controller.py
+├── persistence/
+│   └── sqlalchemy/
+│       ├── enterprise_sync_data_object.py
+│       └── enterprise_sync_keyword.py
+├── base/
+│   └── enterprise_sync_action_mapper.py
+└── configuration/
+    └── enterprise_sync_constants.py
+```
+
+### Key Classes
+
+#### EnterpriseSync Facade
+
+**Location:** `FreeTAKServer/core/enterprise_sync/enterprise_sync_facade.py:15`
+
+```python
+class EnterpriseSync(DefaultFacade):
+    def __init__(self, sync_action_mapper, request, response, 
+                 configuration, tracing_provider_instance=None):
+        self.general_controller = EnterpriseSyncGeneralController(
+            request, response, sync_action_mapper, configuration
+        )
+```
+
+**Public Methods:**
+- `save_enterprise_sync_data()` - Save data and metadata
+- `get_enterprise_sync_data()` - Retrieve data by UID or hash
+- `get_multiple_enterprise_sync_data()` - Batch retrieval
+- `update_enterprise_sync_data()` - Update existing data
+- `delete_enterprise_sync_data()` - Remove data
+- `get_enterprise_sync_metadata()` - Get metadata only
+- `get_all_enterprise_sync_metadata()` - List all metadata
+
+#### EnterpriseSyncGeneralController
+
+**Location:** `FreeTAKServer/core/enterprise_sync/controllers/enterprise_sync_general_controller.py:28`
+
+Coordinates operations across database, filesystem, and format synchronization controllers.
+
+```python
+class EnterpriseSyncGeneralController(Controller):
+    def __init__(self, request, response, sync_action_mapper, configuration):
+        super().__init__(request, response, sync_action_mapper, configuration)
+        self.filesystem_controller = EnterpriseSyncFilesystemController(...)
+        self.persistence_controller = EnterpriseSyncDatabaseController(...)
+        self.format_sync_controller = EnterpriseSyncFormatSynchronizationController(...)
+```
+
+## Core Functionality
+
+### Saving Data
+
+**Method:** `save_enterprise_sync_data()`  
+**Location:** `enterprise_sync_general_controller.py:113`
+
+```python
+def save_enterprise_sync_data(
+    self, 
+    synctype: str,       # Type of sync object
+    objectuid: str,      # Unique identifier
+    objectdata: str,     # The actual data
+    objkeywords: list,   # Search keywords
+    tool: str,           # Tool that created it
+    mime_type: str,      # MIME type
+    logger,
+    objecthash: str = None,      # SHA256 hash
+    file_name: str = None,       # Display name
+    length: int = None,          # Data length
+    creator_uid: str = "",       # Creator UID
+    privacy: int = 0,            # Privacy level
+    *args, **kwargs
+):
+    # Auto-generate hash if not provided
+    if objecthash == None:
+        objecthash = str(hashlib.sha256(objectdata).hexdigest())
+    
+    # Save to filesystem
+    self.filesystem_controller.save_file(synctype, objectuid, objectdata)
+    
+    # Save metadata to database
+    data_obj = self.persistence_controller.create_enterprise_sync_data_object(
+        synctype, objectuid, objecthash, obj_length, 
+        objkeywords, mime_type, tool, creator_uid, file_name, logger, privacy
+    )
+    
+    return data_obj
+```
+
+**Usage Example:**
+
+```python
+# Save a data package
+enterprise_sync.save_enterprise_sync_data(
+    synctype="content",
+    objectuid="package-001",
+    objectdata=file_bytes,
+    objkeywords=["maps", "terrain"],
+    tool="public",
+    mime_type="application/zip",
+    file_name="terrain-maps.zip",
+    creator_uid="user-123",
+    logger=logger
+)
+```
+
+### Retrieving Data
+
+#### Single Object Retrieval
+
+**Method:** `get_enterprise_sync_data()`  
+**Location:** `enterprise_sync_general_controller.py:179`
+
+```python
+def get_enterprise_sync_data(
+    self,
+    logger,
+    objecthash: str = None,
+    objectuid: str = None,
+    use_bytes: bool = False,
+    convert_newlines: bool = False,
+    *args, **kwargs
+):
+    # Get metadata from database
+    data_obj = self.persistence_controller.get_enterprise_sync_data_object(
+        logger, objectuid, objecthash
+    )
+    
+    # Retrieve file from filesystem
+    object_data = self.filesystem_controller.get_file(
+        data_obj.file_type, data_obj.PrimaryKey, use_bytes=use_bytes
+    )
+    
+    return object_data
+```
+
+**Usage Example:**
+
+```python
+# Retrieve by UID
+request.set_value("objectuid", "package-001")
+request.set_value("use_bytes", True)
+enterprise_sync.get_enterprise_sync_data(logger=logger)
+data = response.get_value("objectdata")
+
+# Retrieve by hash
+request.set_value("objecthash", "sha256hash...")
+enterprise_sync.get_enterprise_sync_data(logger=logger)
+```
+
+#### Multiple Object Retrieval
+
+**Method:** `get_multiple_enterprise_sync_data()`  
+**Location:** `enterprise_sync_general_controller.py:190`
+
+```python
+# Batch retrieve by UIDs
+enterprise_sync.get_multiple_enterprise_sync_data(
+    logger=logger,
+    objectuids=["uid-1", "uid-2", "uid-3"],
+    use_bytes=True
+)
+data_list = response.get_value("objectdata")
+
+# Batch retrieve by hashes
+enterprise_sync.get_multiple_enterprise_sync_data(
+    logger=logger,
+    objecthashs=["hash1", "hash2"],
+    use_bytes=True
+)
+```
+
+### Metadata Operations
+
+#### Get Metadata
+
+**Method:** `get_enterprise_sync_metadata()`  
+**Location:** `enterprise_sync_general_controller.py:257`
+
+```python
+# Get metadata by UID
+enterprise_sync.get_enterprise_sync_metadata(
+    logger=logger,
+    objectuid="package-001"
+)
+metadata = response.get_value("objectmetadata")
+
+# Metadata includes:
+# - PrimaryKey (UID)
+# - hash (SHA256)
+# - file_type (synctype)
+# - mime_type
+# - length
+# - keywords
+# - tool
+# - creator_uid
+# - file_name
+# - private (privacy level)
+```
+
+#### Update Metadata
+
+**Method:** `update_enterprise_sync_metadata()`  
+**Location:** `enterprise_sync_general_controller.py:149`
+
+```python
+# Update metadata fields
+enterprise_sync.update_enterprise_sync_metadata(
+    logger=logger,
+    objectuid="package-001",
+    keywords=["updated", "keywords"],
+    file_name="new-name.zip",
+    privacy=1
+)
+```
+
+#### Get All Metadata
+
+```python
+# List all enterprise sync objects
+enterprise_sync.get_all_enterprise_sync_metadata(logger=logger)
+all_metadata = response.get_value("objectmetadata")
+```
+
+### Updating Data
+
+**Method:** `update_enterprise_sync_data()`  
+**Location:** `enterprise_sync_general_controller.py:134`
+
+```python
+# Update existing data
+enterprise_sync.update_enterprise_sync_data(
+    objectuid="package-001",
+    objecthash="new-sha256-hash",
+    objectdata=updated_bytes,
+    logger=logger
+)
+```
+
+### Deleting Data
+
+**Method:** `delete_enterprise_sync_data()`  
+**Location:** `enterprise_sync_general_controller.py:287`
+
+```python
+# Delete data and metadata
+enterprise_sync.delete_enterprise_sync_data(
+    logger=logger,
+    objectuid="package-001"
+)
+```
+
+## Data Types (synctype)
+
+Enterprise Sync supports various data types:
+
+| Synctype | Description | Used By |
+|----------|-------------|----------|
+| `content` | General data packages | Missions, file sharing |
+| `ExCheckTemplate` | ExCheck templates | ExCheck component |
+| `ExCheckChecklist` | Active checklists | ExCheck component |
+| `ExCheckChecklistTask` | Checklist tasks | ExCheck component |
+| Custom types | Application-specific | Various components |
+
+## Storage Architecture
+
+### Dual Storage Model
+
+Enterprise Sync uses a dual storage approach:
+
+1. **Filesystem Storage**: Actual file data stored on disk
+   - Organized by synctype
+   - Accessed via `EnterpriseSyncFilesystemController`
+   - Supports both binary and text data
+
+2. **Database Metadata**: Searchable metadata in database
+   - Indexed by UID and hash
+   - Supports keyword search
+   - Tracks ownership and permissions
+
+### Data Object Model
+
+```python
+class EnterpriseSyncDataObject:
+    PrimaryKey: str          # Object UID
+    hash: str                # SHA256 hash
+    file_type: str           # Synctype
+    mime_type: str           # MIME type
+    length: int              # Data size
+    keywords: List[str]      # Search keywords
+    tool: str                # Creating tool
+    creator_uid: str         # Creator UID
+    file_name: str           # Display name
+    private: int             # Privacy level (0=public, 1=private)
+    submission_time: datetime
+```
+
+## Integration with Components
+
+### Mission Component
+
+```python
+# Missions use Enterprise Sync for content storage
+self.request.set_value("synctype", "content")
+self.request.set_value("objectdata", mission_content)
+self.request.set_value("objectuid", content_uid)
+self.execute_sub_action("SaveEnterpriseSyncData")
+```
+
+### ExCheck Component
+
+```python
+# ExCheck stores templates and checklists
+self.request.set_value("synctype", "ExCheckTemplate")
+self.request.set_value("objectdata", template_xml)
+self.request.set_value("objkeywords", ["Template"])
+self.execute_sub_action("SaveEnterpriseSyncData")
+```
+
+### Data Package Service
+
+Enterprise Sync provides the storage backend for the Data Package service, handling file uploads and downloads.
+
+## Advanced Features
+
+### Format Synchronization
+
+The `EnterpriseSyncFormatSynchronizationController` handles:
+
+- Newline conversion for cross-platform compatibility
+- Format normalization
+- Encoding management
+
+### Hash-Based Deduplication
+
+Data is identified by SHA256 hash, enabling:
+
+- Automatic deduplication
+- Content-addressable storage
+- Data integrity verification
+
+### Privacy Levels
+
+```python
+# Public data (privacy=0)
+enterprise_sync.save_enterprise_sync_data(
+    privacy=0,  # Accessible to all
+    ...
+)
+
+# Private data (privacy=1)
+enterprise_sync.save_enterprise_sync_data(
+    privacy=1,  # Restricted access
+    ...
+)
+```
+
+## Best Practices
+
+1. **Always Use Hashes**: Let the system auto-generate hashes for integrity
+2. **Meaningful Keywords**: Use descriptive keywords for searchability
+3. **Proper MIME Types**: Set correct MIME types for content handling
+4. **Batch Operations**: Use multiple get/update methods for efficiency
+5. **Cleanup**: Delete unused data to conserve storage
+
+## Performance Considerations
+
+- **Batch Retrieval**: Use `get_multiple_enterprise_sync_data()` for multiple objects
+- **Metadata Only**: Use metadata methods when full data isn't needed
+- **Indexing**: Keywords and UIDs are indexed for fast lookup
+- **Caching**: Consider caching frequently accessed data
+
+## Error Handling
+
+```python
+try:
+    enterprise_sync.get_enterprise_sync_data(
+        logger=logger,
+        objectuid=uid
+    )
+    data = response.get_value("objectdata")
+    if data is None:
+        # Object not found
+        handle_missing_object()
+except Exception as e:
+    logger.error(f"Enterprise sync error: {e}")
+```
+
+## Related Components
+
+- [Mission](/components/mission) - Uses Enterprise Sync for mission content
+- [ExCheck](/components/excheck) - Stores templates and checklists
+- Data Package Service - Backend for file operations

@@ -1,0 +1,559 @@
+---
+title: "Database Configuration"
+description: "Configure database connections, SQLAlchemy settings, and data persistence"
+icon: "database"
+---
+
+## Overview
+
+FreeTAKServer uses SQLAlchemy ORM for database operations with support for SQLite and MySQL. The database stores:
+
+- User information and authentication
+- Cursor on Target (CoT) events
+- Data packages
+- Video streams
+- Emergency notifications
+- Federation configurations
+- ExCheck checklists
+- API users and access logs
+
+## Database Configuration
+
+Database settings are managed through the `DatabaseConfiguration` class located in `FreeTAKServer/core/configuration/DatabaseConfiguration.py`.
+
+### Database Type
+
+<ParamField path="DataBaseType" type="string" default="SQLite">
+  Database engine to use. Supported values: `SQLite`, `MySQL`
+  
+  **Environment variable:** `FTS_DATABASE_TYPE`
+  
+  **YAML:** `System.FTS_DATABASE_TYPE`
+</ParamField>
+
+### Database Path
+
+<ParamField path="DBFilePath" type="string" default="/opt/fts/FTSDataBase.db">
+  Path to the database file (SQLite) or connection details (MySQL)
+  
+  **Environment variable:** `FTS_DB_PATH`
+  
+  **YAML:** `Filesystem.FTS_DB_PATH`
+</ParamField>
+
+### CoT Database Storage
+
+<ParamField path="SaveCoTToDB" type="boolean" default="true">
+  Whether to save Cursor on Target (CoT) messages to the database
+  
+  **Environment variable:** `FTS_COT_TO_DB`
+  
+  **YAML:** `Filesystem.FTS_COT_TO_DB`
+</ParamField>
+
+## Connection Strings
+
+The `DatabaseConfiguration` class automatically generates SQLAlchemy connection strings based on the database type.
+
+### SQLite Configuration
+
+```python
+from FreeTAKServer.core.configuration.DatabaseConfiguration import DatabaseConfiguration
+
+config = DatabaseConfiguration()
+# Connection string: sqlite:////opt/fts/FTSDataBase.db
+```
+
+**YAML Configuration:**
+```yaml
+System:
+  FTS_DATABASE_TYPE: "SQLite"
+
+Filesystem:
+  FTS_DB_PATH: "/opt/fts/FTSDataBase.db"
+  FTS_COT_TO_DB: true
+```
+
+**Environment Variables:**
+```bash
+export FTS_DATABASE_TYPE="SQLite"
+export FTS_DB_PATH="/opt/fts/FTSDataBase.db"
+export FTS_COT_TO_DB=true
+```
+
+### MySQL Configuration
+
+**YAML Configuration:**
+```yaml
+System:
+  FTS_DATABASE_TYPE: "MySQL"
+
+Filesystem:
+  FTS_DB_PATH: "username:password@localhost/freetakserver"
+  FTS_COT_TO_DB: true
+```
+
+**Environment Variables:**
+```bash
+export FTS_DATABASE_TYPE="MySQL"
+export FTS_DB_PATH="username:password@localhost/freetakserver"
+export FTS_COT_TO_DB=true
+```
+
+**Connection String Format:**
+```
+mysql://username:password@host:port/database_name
+```
+
+**Example:**
+```
+mysql://ftsuser:securepass@192.168.1.100:3306/freetakserver
+```
+
+## Database Controller
+
+The `DatabaseController` class (`FreeTAKServer/core/persistence/DatabaseController.py`) provides the main interface for database operations.
+
+### Initialization
+
+```python
+from FreeTAKServer.core.persistence.DatabaseController import DatabaseController
+
+db = DatabaseController()
+```
+
+The controller automatically:
+1. Creates the SQLAlchemy engine with the configured connection string
+2. Creates a session maker
+3. Creates an active session
+4. Initializes table controllers for each data type
+5. Creates all database tables if they don't exist
+6. Creates a default admin user on first run
+
+### Default Admin User
+
+On first initialization, a default system user is created:
+
+```python
+uid: "1"
+name: "admin"
+password: "password"
+token: "token"
+device_type: "mobile"
+```
+
+<Warning>
+  Change the default admin credentials immediately after installation for security.
+</Warning>
+
+## Database Tables
+
+FreeTAKServer creates and manages the following database tables:
+
+### User Tables
+
+- **User**: TAK client users and their CoT information
+- **SystemUser**: System administrators and API users
+- **APIUsers**: REST API user authentication
+
+### Event Tables
+
+- **Event**: CoT events (when `SaveCoTToDB` is enabled)
+- **Archive**: Archived CoT data
+- **Chat**: Chat messages
+- **Emergency**: Emergency notifications
+- **ActiveEmergencys**: Currently active emergencies
+
+### Data Tables
+
+- **DataPackage**: Uploaded data packages
+- **VideoStream**: Video stream configurations
+- **_Video**: Video metadata
+
+### Checklist Tables
+
+- **ExCheck**: ExCheck templates
+- **ExCheckChecklist**: ExCheck checklist instances
+- **ExCheckKeywords**: Keywords for ExCheck
+- **ExCheckData**: ExCheck data entries
+
+### Federation Tables
+
+- **Federations**: Federation server configurations
+- **ActiveFederations**: Currently active federation connections
+
+### Support Tables
+
+- **_Group**: CoT group information
+- **Color**: CoT color information
+- **Contact**: Contact details
+- **Dest**: Destination information
+- **Link**: CoT links
+- **Marti**: Marti-specific data
+- **Precisionlocation**: High-precision location data
+- **Remarks**: CoT remarks
+- **Serverdestination**: Server destination routing
+- **Status**: Status information
+- **Summary**: CoT summaries
+- **Takv**: TAK version information
+- **Track**: Tracking data
+- **Uid**: Unique identifiers
+- **Usericon**: User icon data
+
+### Logging Tables
+
+- **APICalls**: REST API access logs
+
+## Database Operations
+
+The `DatabaseController` provides CRUD operations for all tables.
+
+### Create Operations
+
+```python
+from FreeTAKServer.core.persistence.DatabaseController import DatabaseController
+
+db = DatabaseController()
+
+# Create a data package
+db.create_datapackage(
+    PrimaryKey=1,
+    Hash="abc123",
+    Name="mission_plan.zip",
+    SubmissionDateTime="2024-03-04T10:00:00Z"
+)
+
+# Create a system user
+db.create_systemUser(
+    uid="user123",
+    name="operator",
+    password="hashed_password",
+    token="auth_token",
+    device_type="desktop"
+)
+
+# Create an API user
+db.create_APIUser(
+    Username="api_user",
+    Password="hashed_password",
+    token="api_token"
+)
+```
+
+### Query Operations
+
+```python
+# Query with filter expression
+users = db.query_user(query='callsign == "ALPHA-1"')
+
+# Query all records
+all_packages = db.query_datapackage(query="1=1")
+
+# Query specific columns
+user_names = db.query_systemUser(
+    query="1=1",
+    column=['name', 'uid']
+)
+
+# Query by parameters
+user = db.query_by_systemUser(
+    columns=['*'],
+    name="admin"
+)
+```
+
+### Update Operations
+
+```python
+# Update user information
+db.update_user(
+    column_value={'callsign': 'BRAVO-2'},
+    query='uid == "user123"'
+)
+
+# Update data package
+db.update_datapackage(
+    column_value={'Name': 'updated_name.zip'},
+    query='Hash == "abc123"'
+)
+```
+
+### Delete Operations
+
+```python
+# Delete by query
+db.remove_user(query='uid == "old_user"')
+
+# Delete data package
+db.remove_datapackage(query='Hash == "abc123"')
+
+# Delete all (use with caution!)
+db.remove_CoT(query="1=1")
+```
+
+## Session Management
+
+The `DatabaseController` manages SQLAlchemy sessions automatically.
+
+### Session Creation
+
+```python
+# Sessions are created automatically
+db = DatabaseController()
+
+# Access the active session
+session = db.session
+```
+
+### Manual Session Creation
+
+```python
+# Create a new session
+new_session = db.create_Session()
+
+# Use the session
+try:
+    # Database operations
+    new_session.commit()
+finally:
+    new_session.close()
+```
+
+### Shutdown Connection
+
+```python
+# Close session and dispose engine
+db.shutdown_Connection()
+```
+
+## CoT Event Storage
+
+When `SaveCoTToDB` is enabled, all CoT events are stored in the database.
+
+### Creating CoT Events
+
+```python
+from FreeTAKServer.model.SQLAlchemy.CoTTables import Event
+
+# Create CoT event object
+cot_event = Event.Event()
+cot_event.uid = "unique-event-id"
+cot_event.type = "a-f-G-E-V-C"
+cot_event.how = "m-g"
+# ... set other properties
+
+# Save to database
+db.create_CoT(cot_event)
+```
+
+### Querying CoT Events
+
+```python
+# Get recent events
+recent_events = db.query_CoT(
+    query='time > "2024-03-04T00:00:00Z"',
+    column=['uid', 'type', 'time']
+)
+
+# Get events by type
+friendly_units = db.query_CoT(
+    query='type LIKE "a-f-%"'
+)
+```
+
+### Disabling CoT Storage
+
+To reduce database size and improve performance, you can disable CoT storage:
+
+```yaml
+Filesystem:
+  FTS_COT_TO_DB: false
+```
+
+<Note>
+  Disabling CoT storage reduces database growth but prevents historical event queries and replay functionality.
+</Note>
+
+## Database Migrations
+
+FreeTAKServer uses SQLAlchemy's metadata system for automatic table creation.
+
+### Automatic Migration
+
+On startup, the database controller automatically:
+
+1. Connects to the database
+2. Checks for the `SystemUser` table
+3. If tables don't exist, creates all tables from the Base metadata
+4. Creates default admin user if it's a new installation
+
+```python
+def create_engine(self):
+    engine = create_engine(DatabaseConfiguration().DataBaseConnectionString, echo=False)
+    with engine.connect() as connection:
+        if not connection.dialect.has_table(connection, "SystemUser"):
+            Base.metadata.create_all(engine)
+            # Create default admin user
+            tempsession = sessionmaker(bind=engine)()
+            tempsession.add(SystemUser(uid="1", name="admin", ...))
+            tempsession.commit()
+            tempsession.close()
+    return engine
+```
+
+### Manual Table Creation
+
+```python
+from sqlalchemy import create_engine
+from FreeTAKServer.model.SQLAlchemy.Root import Base
+from FreeTAKServer.core.configuration.DatabaseConfiguration import DatabaseConfiguration
+
+engine = create_engine(DatabaseConfiguration().DataBaseConnectionString)
+Base.metadata.create_all(engine)
+```
+
+## Database Backup
+
+### SQLite Backup
+
+```bash
+# Stop FreeTAKServer first
+sudo systemctl stop fts
+
+# Backup database
+cp /opt/fts/FTSDataBase.db /backup/FTSDataBase_$(date +%Y%m%d).db
+
+# Restart FreeTAKServer
+sudo systemctl start fts
+```
+
+### MySQL Backup
+
+```bash
+# Dump database
+mysqldump -u ftsuser -p freetakserver > fts_backup_$(date +%Y%m%d).sql
+
+# Restore database
+mysql -u ftsuser -p freetakserver < fts_backup_20240304.sql
+```
+
+## Performance Optimization
+
+### SQLite Optimization
+
+**Disable CoT Storage** (if not needed):
+```yaml
+Filesystem:
+  FTS_COT_TO_DB: false
+```
+
+**Use WAL Mode** (Write-Ahead Logging):
+```python
+from sqlalchemy import create_engine, event
+
+engine = create_engine(
+    'sqlite:////opt/fts/FTSDataBase.db',
+    connect_args={'check_same_thread': False}
+)
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+```
+
+### MySQL Optimization
+
+**Connection Pooling:**
+```python
+engine = create_engine(
+    'mysql://user:pass@localhost/fts',
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=3600
+)
+```
+
+**Indexes** (automatically created by SQLAlchemy for primary and foreign keys)
+
+## Database Troubleshooting
+
+### Common Issues
+
+**Database locked (SQLite):**
+- Ensure only one FreeTAKServer instance is running
+- Check for stuck processes: `lsof /opt/fts/FTSDataBase.db`
+- Enable WAL mode for better concurrency
+
+**Connection refused (MySQL):**
+- Verify MySQL service is running: `systemctl status mysql`
+- Check connection string format
+- Verify user permissions: `GRANT ALL ON freetakserver.* TO 'ftsuser'@'localhost'`
+
+**Table doesn't exist:**
+- Delete database file and restart (SQLite)
+- Run manual table creation script
+- Check database permissions
+
+**Slow queries:**
+- Disable CoT storage if not needed
+- Increase `MainLoopDelay` to reduce database writes
+- Use MySQL instead of SQLite for large deployments
+
+## Example Configurations
+
+### Development (SQLite)
+
+```yaml
+System:
+  FTS_DATABASE_TYPE: "SQLite"
+
+Filesystem:
+  FTS_DB_PATH: "./dev_data/FTSDataBase.db"
+  FTS_COT_TO_DB: true
+```
+
+### Production (SQLite)
+
+```yaml
+System:
+  FTS_DATABASE_TYPE: "SQLite"
+
+Filesystem:
+  FTS_DB_PATH: "/opt/fts/FTSDataBase.db"
+  FTS_COT_TO_DB: false  # Disable for performance
+```
+
+### Production (MySQL)
+
+```yaml
+System:
+  FTS_DATABASE_TYPE: "MySQL"
+
+Filesystem:
+  FTS_DB_PATH: "ftsuser:securepassword@192.168.1.100:3306/freetakserver"
+  FTS_COT_TO_DB: true
+```
+
+## Best Practices
+
+<Warning>
+  Always backup your database before upgrading FreeTAKServer or making configuration changes.
+</Warning>
+
+<Tip>
+  For deployments with more than 50 concurrent clients, consider using MySQL instead of SQLite for better concurrent write performance.
+</Tip>
+
+- Regular database backups (automated daily backups recommended)
+- Monitor database size and implement retention policies
+- Use MySQL for production deployments with many clients
+- Disable CoT storage if historical event data is not needed
+- Implement database backup automation
+- Set appropriate filesystem permissions on database files
+- Use connection pooling for MySQL deployments
+- Monitor database performance and adjust `MainLoopDelay` accordingly
+- Keep database files on fast storage (SSD recommended)
+- Regularly vacuum SQLite databases to reclaim space

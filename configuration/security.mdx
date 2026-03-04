@@ -1,0 +1,578 @@
+---
+title: "Security Configuration"
+description: "Authentication, authorization, SSL/TLS certificates, and security best practices"
+icon: "shield"
+---
+
+## Overview
+
+FreeTAKServer implements multiple layers of security:
+
+- **SSL/TLS Encryption**: Secure communications using X.509 certificates
+- **Client Certificate Authentication**: Mutual TLS authentication for TAK clients
+- **Token-Based Authentication**: Bearer tokens for REST API access
+- **Certificate Revocation**: Certificate Revocation List (CRL) support
+- **User Management**: System and API user authentication
+
+## SSL/TLS Configuration
+
+SSL/TLS encryption is essential for protecting tactical data in production deployments.
+
+### Certificate Paths
+
+<ParamField path="certsPath" type="string" default="/opt/fts/certs">
+  Root directory for all certificates and keys
+  
+  **Environment variable:** `FTS_CERTS_PATH`
+  
+  **YAML:** `Filesystem.FTS_CERTS_PATH`
+</ParamField>
+
+### Server Certificate
+
+<ParamField path="keyDir" type="string" default="/opt/fts/certs/server.key">
+  Path to server private key (PEM format)
+  
+  **Environment variable:** `FTS_SERVER_KEYDIR`
+  
+  **YAML:** `Certs.FTS_SERVER_KEYDIR`
+</ParamField>
+
+<ParamField path="pemDir" type="string" default="/opt/fts/certs/server.pem">
+  Path to server certificate (PEM format)
+  
+  **Environment variable:** `FTS_SERVER_PEMDIR`
+  
+  **YAML:** `Certs.FTS_SERVER_PEMDIR`
+</ParamField>
+
+<ParamField path="unencryptedKey" type="string" default="/opt/fts/certs/server.key.unencrypted">
+  Path to unencrypted server key (used internally by services)
+  
+  **Environment variable:** `FTS_UNENCRYPTED_KEYDIR`
+  
+  **YAML:** `Certs.FTS_UNENCRYPTED_KEYDIR`
+</ParamField>
+
+<ParamField path="p12Dir" type="string" default="/opt/fts/certs/server.p12">
+  Path to PKCS#12 format certificate bundle (includes private key and certificate)
+  
+  **Environment variable:** `FTS_SERVER_P12DIR`
+  
+  **YAML:** `Certs.FTS_SERVER_P12DIR`
+</ParamField>
+
+### Certificate Authority (CA)
+
+<ParamField path="CA" type="string" default="/opt/fts/certs/ca.pem">
+  Path to Certificate Authority certificate
+  
+  **Environment variable:** `FTS_CADIR`
+  
+  **YAML:** `Certs.FTS_CADIR`
+</ParamField>
+
+<ParamField path="CAkey" type="string" default="/opt/fts/certs/ca.key">
+  Path to Certificate Authority private key (for signing client certificates)
+  
+  **Environment variable:** `FTS_CAKEYDIR`
+  
+  **YAML:** `Certs.FTS_CAKEYDIR`
+</ParamField>
+
+### Test Client Certificates
+
+<ParamField path="testPem" type="string" default="/opt/fts/certs/server.key">
+  Path to test client certificate
+  
+  **Environment variable:** `FTS_TESTCLIENT_PEMDIR`
+  
+  **YAML:** `Certs.FTS_TESTCLIENT_PEMDIR`
+</ParamField>
+
+<ParamField path="testKey" type="string" default="/opt/fts/certs/server.pem">
+  Path to test client private key
+  
+  **Environment variable:** `FTS_TESTCLIENT_KEYDIR`
+  
+  **YAML:** `Certs.FTS_TESTCLIENT_KEYDIR`
+</ParamField>
+
+### Client Certificate Password
+
+<ParamField path="password" type="string" default="supersecret">
+  Password used when generating client certificate packages (P12 files)
+  
+  **Environment variable:** `FTS_CLIENT_CERT_PASSWORD`
+  
+  **YAML:** `Certs.FTS_CLIENT_CERT_PASSWORD`
+</ParamField>
+
+<Warning>
+  Change the default client certificate password in production! This password protects client certificate files.
+</Warning>
+
+### Client Certificate Packages
+
+<ParamField path="ClientPackages" type="string" default="/opt/fts/certs/clientPackages">
+  Directory for storing generated client certificate packages
+  
+  **Environment variable:** `FTS_CLIENT_PACKAGES_PATH`
+  
+  **YAML:** `Filesystem.FTS_CLIENT_PACKAGES_PATH`
+</ParamField>
+
+## Certificate Revocation
+
+<ParamField path="CRLFile" type="string" default="/opt/fts/certs/FTS_CRL.json">
+  Path to Certificate Revocation List (CRL) file in JSON format
+  
+  **Environment variable:** `FTS_CRLDIR`
+  
+  **YAML:** `Certs.FTS_CRLDIR`
+</ParamField>
+
+The CRL allows administrators to revoke compromised or unauthorized client certificates.
+
+### CRL File Format
+
+```json
+{
+  "revoked_certificates": [
+    {
+      "serial_number": "1A2B3C4D5E6F",
+      "revocation_date": "2024-03-04T10:00:00Z",
+      "reason": "compromised"
+    },
+    {
+      "serial_number": "9F8E7D6C5B4A",
+      "revocation_date": "2024-03-03T15:30:00Z",
+      "reason": "privilege_withdrawn"
+    }
+  ]
+}
+```
+
+## Federation Security
+
+<ParamField path="federationCert" type="string" default="/opt/fts/certs/server.pem">
+  Certificate used for federation connections with other TAK servers
+  
+  **Environment variable:** `FTS_FEDERATION_CERTDIR`
+  
+  **YAML:** `Certs.FTS_FEDERATION_CERTDIR`
+</ParamField>
+
+<ParamField path="federationKey" type="string" default="/opt/fts/certs/server.key">
+  Private key for federation connections
+  
+  **Environment variable:** `FTS_FEDERATION_KEYDIR`
+  
+  **YAML:** `Certs.FTS_FEDERATION_KEYDIR`
+</ParamField>
+
+<ParamField path="federationKeyPassword" type="string" default="defaultpass">
+  Password for the federation private key
+  
+  **Environment variable:** `FTS_FEDERATION_KEYPASS`
+  
+  **YAML:** `Certs.FTS_FEDERATION_KEYPASS`
+</ParamField>
+
+## REST API Authentication
+
+The REST API uses HTTP Bearer token authentication.
+
+### Secret Key
+
+<ParamField path="SecretKey" type="string" default="vnkdjnfjknfl1232#">
+  Secret key for cryptographic operations, session management, and token signing
+  
+  **Environment variable:** `FTS_SECRET_KEY`
+  
+  **YAML:** `System.FTS_SECRET_KEY`
+</ParamField>
+
+<Warning>
+  The default `SecretKey` MUST be changed in production! Generate a cryptographically secure random string.
+</Warning>
+
+### WebSocket Key
+
+<ParamField path="websocketkey" type="string" default="YourWebsocketKey">
+  Authentication key for WebSocket connections
+  
+  **Environment variable:** `FTS_WEBSOCKET_KEY`
+  
+  **YAML:** `Certs.FTS_WEBSOCKET_KEY`
+</ParamField>
+
+### Authentication Implementation
+
+From `FreeTAKServer/services/rest_api_service/controllers/authentication.py`:
+
+```python
+from flask_httpauth import HTTPTokenAuth
+
+auth = HTTPTokenAuth(scheme='Bearer')
+
+@auth.verify_token
+def verify_token(token):
+    # Verify against APIUser table
+    output = dbController.query_APIUser(query=f'token = "{token}"')
+    if output:
+        return output[0].Username
+    
+    # Verify against SystemUser table
+    output = dbController.query_systemUser(query=f'token = "{token}"')
+    if output:
+        # Log API call
+        dbController.create_APICall(
+            user_id=output[0].uid,
+            timestamp=datetime.now(),
+            content=request.data,
+            endpoint=request.base_url
+        )
+        return output[0].name
+```
+
+### User Types
+
+**SystemUser**: Administrative users with full access
+- Stored in `SystemUser` table
+- Default admin user created on first run
+- All API calls are logged
+
+**APIUser**: Application users with limited access
+- Stored in `APIUser` table
+- Created via user management API
+- No automatic logging
+
+## CLI Access Control
+
+<ParamField path="CLIIP" type="string" default="127.0.0.1">
+  IP address for CLI access interface
+</ParamField>
+
+<ParamField path="AllowCLIIPs" type="list" default="[127.0.0.1]">
+  Whitelist of IP addresses allowed to access the CLI interface
+  
+  **Environment variable:** `FTS_CLI_WHITELIST` (colon or comma separated)
+  
+  **YAML:** `Addresses.FTS_CLI_WHITELIST`
+</ParamField>
+
+**Example:**
+```yaml
+Addresses:
+  FTS_CLI_WHITELIST: ["127.0.0.1", "192.168.1.0/24", "10.0.0.5"]
+```
+
+## SSL/TLS Timeouts
+
+From `FreeTAKServer/core/configuration/ReceiveConnectionsConstants.py`:
+
+```python
+WRAP_SSL_TIMEOUT = 1.0  # Timeout for SSL handshake
+SSL_SOCK_TIMEOUT = 60   # Timeout for SSL socket operations
+```
+
+These values control SSL/TLS connection behavior:
+- **WRAP_SSL_TIMEOUT**: Maximum time to complete SSL handshake
+- **SSL_SOCK_TIMEOUT**: Maximum idle time for established SSL connections
+
+## Security Configuration Examples
+
+### Development Environment
+
+```yaml
+System:
+  FTS_SECRET_KEY: "dev-secret-key-not-for-production"
+
+Addresses:
+  FTS_COT_PORT: 8087  # Unencrypted for testing
+  FTS_API_ADDRESS: "127.0.0.1"  # Local only
+  FTS_CLI_WHITELIST: ["127.0.0.1"]
+
+Certs:
+  FTS_CLIENT_CERT_PASSWORD: "test123"
+```
+
+<Note>
+  Development environments can use unencrypted connections for convenience, but production deployments should always use SSL/TLS.
+</Note>
+
+### Production Environment
+
+```yaml
+System:
+  FTS_SECRET_KEY: "Km9pR3tX8vL2nQ5wY7aE1cH4uD6gF0iJ3bN8mP5sT7zA"  # Strong random key
+
+Addresses:
+  FTS_SSLCOT_PORT: 8089  # SSL only
+  FTS_HTTPS_TAK_API_PORT: 8443  # HTTPS only
+  FTS_API_ADDRESS: "0.0.0.0"
+  FTS_CLI_WHITELIST: ["10.0.0.0/8", "192.168.1.100"]  # Restricted IPs
+
+Certs:
+  FTS_CERTS_PATH: "/opt/fts/certs"
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/production-server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/production-server.pem"
+  FTS_CADIR: "/opt/fts/certs/production-ca.pem"
+  FTS_CAKEYDIR: "/opt/fts/certs/production-ca.key"
+  FTS_CLIENT_CERT_PASSWORD: "Zx9C7v5B3nM1qW8eR4tY6uI0oP2aS5dF"  # Strong password
+  FTS_CRLDIR: "/opt/fts/certs/production-crl.json"
+  FTS_FEDERATION_CERTDIR: "/opt/fts/certs/federation.pem"
+  FTS_FEDERATION_KEYDIR: "/opt/fts/certs/federation.key"
+  FTS_FEDERATION_KEYPASS: "H4gF7jK9lP2mN5qR8tW1yU3xC6vB0zA"  # Strong password
+```
+
+## Certificate Generation
+
+### Generate CA Certificate
+
+```bash
+# Generate CA private key
+openssl genrsa -out /opt/fts/certs/ca.key 4096
+
+# Generate CA certificate
+openssl req -new -x509 -key /opt/fts/certs/ca.key \
+  -out /opt/fts/certs/ca.pem -days 3650 \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=FTS-CA"
+```
+
+### Generate Server Certificate
+
+```bash
+# Generate server private key
+openssl genrsa -out /opt/fts/certs/server.key 2048
+
+# Generate certificate signing request
+openssl req -new -key /opt/fts/certs/server.key \
+  -out /opt/fts/certs/server.csr \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=fts.example.com"
+
+# Sign with CA
+openssl x509 -req -in /opt/fts/certs/server.csr \
+  -CA /opt/fts/certs/ca.pem -CAkey /opt/fts/certs/ca.key \
+  -CAcreateserial -out /opt/fts/certs/server.pem -days 365
+
+# Create unencrypted key copy
+cp /opt/fts/certs/server.key /opt/fts/certs/server.key.unencrypted
+```
+
+### Generate Client Certificate
+
+```bash
+# Generate client private key
+openssl genrsa -out /opt/fts/certs/client.key 2048
+
+# Generate certificate signing request
+openssl req -new -key /opt/fts/certs/client.key \
+  -out /opt/fts/certs/client.csr \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=client-001"
+
+# Sign with CA
+openssl x509 -req -in /opt/fts/certs/client.csr \
+  -CA /opt/fts/certs/ca.pem -CAkey /opt/fts/certs/ca.key \
+  -CAcreateserial -out /opt/fts/certs/client.pem -days 365
+
+# Create P12 bundle for distribution
+openssl pkcs12 -export -out /opt/fts/certs/client.p12 \
+  -inkey /opt/fts/certs/client.key \
+  -in /opt/fts/certs/client.pem \
+  -certfile /opt/fts/certs/ca.pem \
+  -password pass:supersecret
+```
+
+## User Management
+
+### Create API User
+
+```python
+from FreeTAKServer.core.persistence.DatabaseController import DatabaseController
+import secrets
+
+db = DatabaseController()
+
+# Generate secure token
+token = secrets.token_urlsafe(32)
+
+# Create API user
+db.create_APIUser(
+    Username="api_operator",
+    Password="hashed_password_here",  # Use proper password hashing
+    token=token
+)
+```
+
+### Create System User
+
+```python
+db.create_systemUser(
+    uid=str(uuid4()),
+    name="operator_01",
+    password="hashed_password_here",
+    token=secrets.token_urlsafe(32),
+    device_type="desktop"
+)
+```
+
+### Using API Authentication
+
+```bash
+# Authenticate and receive token
+curl -X POST https://fts.example.com:19023/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"api_operator","password":"securepass"}'
+
+# Use token for subsequent requests
+curl -X GET https://fts.example.com:19023/api/users \
+  -H "Authorization: Bearer your-token-here"
+```
+
+## Certificate Revocation Process
+
+### Add Certificate to CRL
+
+```python
+import json
+from datetime import datetime
+
+# Read existing CRL
+with open('/opt/fts/certs/FTS_CRL.json', 'r') as f:
+    crl = json.load(f)
+
+# Add revoked certificate
+crl['revoked_certificates'].append({
+    'serial_number': '1A2B3C4D5E6F',
+    'revocation_date': datetime.utcnow().isoformat() + 'Z',
+    'reason': 'compromised'
+})
+
+# Write updated CRL
+with open('/opt/fts/certs/FTS_CRL.json', 'w') as f:
+    json.dump(crl, f, indent=2)
+```
+
+### Revocation Reasons
+
+- `unspecified`: No specific reason given
+- `key_compromise`: Private key has been compromised
+- `ca_compromise`: CA has been compromised
+- `affiliation_changed`: User's affiliation has changed
+- `superseded`: Certificate has been replaced
+- `cessation_of_operation`: Certificate is no longer needed
+- `privilege_withdrawn`: User privileges have been revoked
+
+## File Permissions
+
+Proper filesystem permissions are critical for security:
+
+```bash
+# Set ownership
+sudo chown -R fts:fts /opt/fts/certs
+
+# Secure private keys (read-only for owner)
+sudo chmod 400 /opt/fts/certs/*.key
+sudo chmod 400 /opt/fts/certs/ca.key
+
+# Secure certificates (readable by group)
+sudo chmod 444 /opt/fts/certs/*.pem
+sudo chmod 444 /opt/fts/certs/ca.pem
+
+# Secure client packages directory
+sudo chmod 750 /opt/fts/certs/clientPackages
+
+# Secure CRL file
+sudo chmod 644 /opt/fts/certs/FTS_CRL.json
+```
+
+## Security Best Practices
+
+<Warning>
+  Never commit certificates, private keys, or passwords to version control systems.
+</Warning>
+
+<Warning>
+  Always change default passwords and secret keys before deploying to production.
+</Warning>
+
+<Tip>
+  Generate cryptographically secure random strings for `SecretKey`, `password`, and `federationKeyPassword` using `openssl rand -base64 32` or similar tools.
+</Tip>
+
+### Mandatory Production Security Measures
+
+1. **Change all default passwords and keys**
+   - `SecretKey`
+   - `password` (client certificate password)
+   - `federationKeyPassword`
+   - Default admin user credentials
+
+2. **Use SSL/TLS encryption**
+   - Enable SSL CoT service (port 8089)
+   - Enable HTTPS TAK API (port 8443)
+   - Disable unencrypted services in production
+
+3. **Implement certificate management**
+   - Generate unique certificates for production
+   - Use strong key lengths (2048-bit minimum, 4096-bit recommended)
+   - Set appropriate certificate expiration dates
+   - Implement certificate rotation procedures
+
+4. **Configure access controls**
+   - Restrict CLI access with `AllowCLIIPs`
+   - Use firewall rules to limit service access
+   - Implement network segmentation
+
+5. **Secure filesystem**
+   - Set restrictive permissions on certificate files
+   - Protect private keys (chmod 400)
+   - Regular security audits of file permissions
+
+6. **Monitor and log**
+   - Enable API call logging
+   - Monitor certificate expiration dates
+   - Review access logs regularly
+   - Implement intrusion detection
+
+7. **Certificate revocation**
+   - Maintain current CRL
+   - Implement certificate revocation procedures
+   - Test revocation process regularly
+
+8. **Backup security**
+   - Encrypt backups containing certificates
+   - Secure backup storage locations
+   - Test backup restoration procedures
+
+9. **Update and patch**
+   - Keep FreeTAKServer updated
+   - Monitor security advisories
+   - Apply security patches promptly
+
+10. **Physical security**
+    - Secure server physical access
+    - Protect certificate storage media
+    - Implement secure key disposal procedures
+
+## Security Checklist
+
+Before deploying to production:
+
+- [ ] Changed default `SecretKey`
+- [ ] Changed default client certificate `password`
+- [ ] Changed default admin credentials
+- [ ] Generated production CA certificate
+- [ ] Generated production server certificates
+- [ ] Configured SSL CoT service
+- [ ] Configured HTTPS TAK API
+- [ ] Disabled unencrypted services
+- [ ] Set appropriate file permissions
+- [ ] Configured `AllowCLIIPs` whitelist
+- [ ] Implemented firewall rules
+- [ ] Tested certificate revocation
+- [ ] Configured backup encryption
+- [ ] Documented certificate procedures
+- [ ] Tested disaster recovery procedures

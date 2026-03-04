@@ -1,0 +1,85 @@
+---
+title: "Mission API"
+description: "Mission management endpoints for creating, retrieving, and managing missions"
+---
+
+The Mission API provides endpoints for managing missions in FreeTAKServer. Missions allow users to share data packages, coordinate activities, and collaborate in real-time.
+
+## Get Mission Table
+
+Retrieve a list of all missions available on the server.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/MissionTable" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Response
+
+<ResponseField name="missions" type="array">
+  Array of mission objects
+  
+  <Expandable title="mission object">
+    <ResponseField name="name" type="string">
+      The mission name
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Mission description
+    </ResponseField>
+    
+    <ResponseField name="created" type="string">
+      ISO 8601 timestamp of mission creation
+    </ResponseField>
+    
+    <ResponseField name="creator" type="string">
+      UID of the mission creator
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "missions": [
+    {
+      "name": "Operation Alpha",
+      "description": "Mission for team coordination",
+      "created": "2024-03-04T12:00:00Z",
+      "creator": "user-uid-123"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<ResponseField name="500 Internal Server Error">
+  ```json
+  {
+    "message": "An error occurred accessing mission details."
+  }
+  ```
+</ResponseField>
+
+## Mission Operations
+
+The Mission API integrates with the enterprise sync component to manage mission data, including:
+
+- Mission creation and deletion
+- Member management (add/remove users)
+- Content sharing (data packages, CoT events)
+- Mission subscriptions and synchronization
+
+## Related Endpoints
+
+For ExCheck mission templates, see [ExCheck API](/api/rest/excheck).
+
+For data package management within missions, see [Data Packages API](/api/rest/data-packages).

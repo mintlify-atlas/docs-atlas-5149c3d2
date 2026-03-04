@@ -1,0 +1,343 @@
+---
+title: 'Enterprise Sync API'
+description: 'TAK Server Enterprise Sync API endpoints for file synchronization and data package management'
+---
+
+## Overview
+
+The Enterprise Sync API provides TAK-compatible endpoints for uploading, downloading, and managing data packages (files) across TAK clients. This API handles mission packages, attachments, and other synchronized content.
+
+## Upload Endpoints
+
+### Upload File (Standard)
+
+<RequestExample>
+```bash
+POST /Marti/sync/upload
+```
+</RequestExample>
+
+<ParamField query="filename" type="string" required>
+  Name of the file being uploaded (can also use "name" parameter)
+</ParamField>
+
+<ParamField query="creatorUid" type="string" required>
+  UID of the creator/uploader
+</ParamField>
+
+<ParamField query="hash" type="string">
+  Optional hash for the content
+</ParamField>
+
+<ParamField query="tool" type="string" default="public">
+  Privacy setting: "public" or "private"
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  MIME type of the uploaded file
+</ParamField>
+
+<ParamField body="assetfile" type="file">
+  File data (multipart form data) or raw request body
+</ParamField>
+
+Uploads a file to Enterprise Sync storage. Accepts either multipart form data or raw binary in request body.
+
+<ResponseExample>
+```json
+{
+  "UID": "unique-id",
+  "SubmissionDateTime": "2026-03-04T12:34:56.789Z",
+  "MIMEType": "application/zip",
+  "SubmissionUser": "user-uid",
+  "PrimaryKey": 123,
+  "Hash": "sha256-hash"
+}
+```
+</ResponseExample>
+
+### Upload File (Content)
+
+<RequestExample>
+```bash
+PUT /Marti/sync/content
+POST /Marti/sync/content
+```
+</RequestExample>
+
+<ParamField query="hash" type="string" required>
+  Hash identifier for the content
+</ParamField>
+
+<ParamField query="filename" type="string" required>
+  Name of the file
+</ParamField>
+
+<ParamField query="creatorUid" type="string" required>
+  UID of the creator
+</ParamField>
+
+<ParamField query="tool" type="string" default="public">
+  Privacy setting
+</ParamField>
+
+<ParamField body="assetfile" type="file" required>
+  File data as multipart form data
+</ParamField>
+
+Alternative upload endpoint that stores content with specified hash.
+
+### Upload Mission Package
+
+<RequestExample>
+```bash
+PUT /Marti/sync/missionupload
+POST /Marti/sync/missionupload
+```
+</RequestExample>
+
+<ParamField query="hash" type="string" required>
+  Hash for the mission package
+</ParamField>
+
+<ParamField query="filename" type="string" required>
+  Filename for the package
+</ParamField>
+
+<ParamField query="creatorUid" type="string" required>
+  Creator UID
+</ParamField>
+
+<ParamField query="tool" type="string" default="public">
+  Privacy setting
+</ParamField>
+
+<ParamField body="assetfile" type="file" required>
+  Mission package file
+</ParamField>
+
+Uploads a mission package and returns the metadata URL.
+
+<ResponseExample>
+```text
+http://server-ip:8080/Marti/api/sync/metadata/{hash}/tool
+```
+</ResponseExample>
+
+<Note>
+HTTPS variant returns `https://` URL instead of `http://`
+</Note>
+
+## Download Endpoints
+
+### Download Content
+
+<RequestExample>
+```bash
+GET /Marti/sync/content
+```
+</RequestExample>
+
+<ParamField query="hash" type="string">
+  Hash of the content to download
+</ParamField>
+
+<ParamField query="uid" type="string">
+  UID of the content to download
+</ParamField>
+
+Downloads file content by hash or UID. At least one parameter is required.
+
+<ResponseField name="objectdata" type="binary">
+  Binary file data with appropriate Content-Type header
+</ResponseField>
+
+### Check Content Exists
+
+<RequestExample>
+```bash
+HEAD /Marti/sync/content
+```
+</RequestExample>
+
+<ParamField query="hash" type="string" required>
+  Hash of the content to check
+</ParamField>
+
+Checks if content exists without downloading it. Returns HTTP 200 if exists, 404 if not found.
+
+### Query Mission Package
+
+<RequestExample>
+```bash
+GET /Marti/sync/missionquery
+```
+</RequestExample>
+
+<ParamField query="hash" type="string" required>
+  Hash of the mission package
+</ParamField>
+
+Downloads a mission package with proper MIME type and filename as attachment.
+
+## Search Endpoints
+
+### Search Data Packages
+
+<RequestExample>
+```bash
+GET /Marti/sync/search
+```
+</RequestExample>
+
+<ParamField query="keyword" type="string" default="missionpackage">
+  Keyword to search for
+</ParamField>
+
+<ParamField query="tool" type="string" default="public">
+  Filter by privacy setting
+</ParamField>
+
+Searches for data packages matching the keyword. Only returns public packages (private=0).
+
+<ResponseExample>
+```json
+{
+  "resultCount": 2,
+  "results": [
+    {
+      "UID": "123",
+      "Name": "package.zip",
+      "Hash": "abc123",
+      "PrimaryKey": "456",
+      "SubmissionDateTime": "2026-03-04T12:34:56.789000Z",
+      "SubmissionUser": "user-uid",
+      "CreatorUid": "creator-uid",
+      "Keywords": ["missionpackage", "package.zip", "user-uid"],
+      "MIMEType": "application/zip",
+      "Size": 12345
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Metadata Management
+
+### Update Package Privacy
+
+<RequestExample>
+```bash
+PUT /Marti/api/sync/metadata/{hash}/tool
+```
+</RequestExample>
+
+<ParamField path="hash" type="string" required>
+  Hash of the package
+</ParamField>
+
+<ParamField body="privacy" type="string" required>
+  Either "private" (sets private=1) or anything else (sets private=0)
+</ParamField>
+
+Updates the privacy setting of a data package.
+
+<ResponseExample>
+```text
+Okay
+```
+</ResponseExample>
+
+### Download Package by Hash
+
+<RequestExample>
+```bash
+GET /Marti/api/sync/metadata/{hash}/tool
+```
+</RequestExample>
+
+<ParamField path="hash" type="string" required>
+  Hash of the package to download
+</ParamField>
+
+Downloads a data package by its hash with proper MIME type and download filename.
+
+<ResponseField name="file" type="binary">
+  File data sent as attachment with original filename
+</ResponseField>
+
+<Note>
+This endpoint supports CORS with wildcard (`@cross_origin(send_wildcard=True)`)
+</Note>
+
+## Data Storage
+
+Enterprise Sync stores the following metadata for each uploaded file:
+
+- **UID**: Unique identifier
+- **Hash**: SHA-256 hash of the content
+- **PrimaryKey**: Database primary key
+- **SubmissionDateTime**: Upload timestamp
+- **SubmissionUser**: Submitter UID
+- **CreatorUid**: Creator UID
+- **Keywords**: Searchable keywords (includes filename, creator UID, and type)
+- **MIMEType**: Content type
+- **Size**: File size in bytes
+- **Tool**: Privacy setting ("public" or "private")
+- **Private**: Boolean flag (0=public, 1=private)
+
+## HTTP vs HTTPS Differences
+
+Both HTTP and HTTPS services implement identical Enterprise Sync endpoints with these differences:
+
+- **Controller**: HTTP uses `HTTPTakApiCommunicationController`, HTTPS uses `HTTPSTakApiCommunicationController`
+- **Upload Response**: Mission upload returns `http://` URLs for HTTP, `https://` for HTTPS
+- **Download Methods**: HTTP returns tuple `(data, status)`, HTTPS may return data directly
+
+## Integration with Missions
+
+Enterprise Sync integrates with the Mission API:
+
+1. Files uploaded via Enterprise Sync receive a hash
+2. The hash can be added to mission contents via `/Marti/api/missions/{mission_id}/contents`
+3. Mission package uploads automatically add content to missions
+4. Mission subscribers can download content using the sync endpoints
+
+## Example Workflow
+
+### Upload and Add to Mission
+
+```bash
+# 1. Upload file
+curl -X POST "http://server:8080/Marti/sync/upload?filename=map.zip&creatorUid=user-123" \
+  -H "Content-Type: application/zip" \
+  --data-binary @map.zip
+
+# Response: {"Hash": "abc123", ...}
+
+# 2. Add to mission
+curl -X PUT "http://server:8080/Marti/api/missions/op-alpha/contents" \
+  -H "Content-Type: application/json" \
+  -d '{"hashes": ["abc123"], "uids": []}'
+```
+
+### Search and Download
+
+```bash
+# 1. Search for packages
+curl "http://server:8080/Marti/sync/search?keyword=map"
+
+# 2. Download by hash
+curl "http://server:8080/Marti/sync/content?hash=abc123" -o downloaded.zip
+```
+
+## Error Responses
+
+- **404 Not Found**: Content does not exist
+- **500 Internal Server Error**: Processing error during upload/download
+
+## Source Code References
+
+- HTTP Blueprint: `FreeTAKServer/services/http_tak_api_service/blueprints/enterprise_sync_blueprint.py:1-144`
+- HTTPS Blueprint: `FreeTAKServer/services/https_tak_api_service/blueprints/enterprise_sync_blueprint.py:1-148`
+- Core Facade: `FreeTAKServer/core/enterprise_sync/enterprise_sync_facade.py:1-103`

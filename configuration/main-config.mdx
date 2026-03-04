@@ -1,0 +1,496 @@
+---
+title: "MainConfig Configuration"
+description: "Core configuration options and settings for FreeTAKServer"
+icon: "gear"
+---
+
+## Overview
+
+The `MainConfig` class is the central configuration system for FreeTAKServer. It provides a singleton instance that manages all server configuration through multiple sources:
+
+- Default values
+- YAML configuration file
+- Environment variables
+
+Configuration values are loaded in the following priority order (lowest to highest):
+1. Built-in defaults
+2. YAML configuration file (`FTSConfig.yaml`)
+3. Environment variables (highest priority)
+
+## Configuration Methods
+
+FreeTAKServer supports three methods for configuration:
+
+### YAML Configuration File
+
+The default configuration file location is `/opt/fts/FTSConfig.yaml`. You can override this with the `FTS_CONFIG_PATH` environment variable.
+
+```yaml
+System:
+  FTS_NODE_ID: "my-custom-node-id"
+  FTS_MAINLOOP_DELAY: 100
+  FTS_CONNECTION_MESSAGE: "Welcome to my FreeTAKServer"
+  FTS_DATABASE_TYPE: "SQLite"
+  FTS_OPTIMIZE_API: true
+
+Addresses:
+  FTS_COT_PORT: 8087
+  FTS_SSLCOT_PORT: 8089
+  FTS_API_PORT: 19023
+  FTS_FED_PORT: 9000
+  FTS_API_ADDRESS: "0.0.0.0"
+
+Filesystem:
+  FTS_PERSISTENCE_PATH: "/opt/fts"
+  FTS_COT_TO_DB: true
+  FTS_DB_PATH: "/opt/fts/FTSDataBase.db"
+  FTS_LOG_LEVEL: "info"
+
+Certs:
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/server.pem"
+  FTS_CADIR: "/opt/fts/certs/ca.pem"
+```
+
+### Environment Variables
+
+All configuration options can be set via environment variables. Environment variables override YAML settings.
+
+```bash
+export FTS_COT_PORT=8087
+export FTS_API_PORT=19023
+export FTS_LOG_LEVEL="debug"
+```
+
+### Programmatic Access
+
+```python
+from FreeTAKServer.core.configuration.MainConfig import MainConfig
+
+config = MainConfig.instance()
+
+# Read configuration
+port = config.CoTServicePort
+api_port = config['APIPort']  # Dictionary syntax also supported
+
+# Write configuration (if not readonly)
+config.LogLevel = "debug"
+config['SaveCoTToDB'] = False
+```
+
+## System Configuration
+
+Core system settings that control server behavior.
+
+<ParamField path="version" type="string" default="FreeTAKServer-2.2.1" readonly>
+  Server version information (read-only)
+</ParamField>
+
+<ParamField path="APIVersion" type="string" default="3" readonly>
+  TAK API version supported (read-only)
+</ParamField>
+
+<ParamField path="nodeID" type="string" default="auto-generated">
+  Unique identifier for this FreeTAKServer node. Auto-generated as 32-character alphanumeric string if not specified.
+  
+  **Environment variable:** `FTS_NODE_ID`
+</ParamField>
+
+<ParamField path="SecretKey" type="string" default="vnkdjnfjknfl1232#">
+  Secret key used for cryptographic operations and session management. **Change this in production!**
+  
+  **Environment variable:** `FTS_SECRET_KEY`
+</ParamField>
+
+<ParamField path="OptimizeAPI" type="boolean" default="true">
+  Enable API optimizations for better performance
+  
+  **Environment variable:** `FTS_OPTIMIZE_API`
+</ParamField>
+
+<ParamField path="MainLoopDelay" type="integer" default="100">
+  Number of milliseconds to wait between each iteration of the main event loop.
+  - Decreasing this value increases CPU usage and server performance
+  - Increasing this value decreases CPU usage and server performance
+  
+  **Environment variable:** `FTS_MAINLOOP_DELAY`
+</ParamField>
+
+<ParamField path="DataReceptionBuffer" type="integer" default="1024">
+  Buffer size in bytes for receiving data from clients
+  
+  **Environment variable:** `FTS_DATA_RECEPTION_BUFFER`
+</ParamField>
+
+<ParamField path="MaxReceptionTime" type="integer" default="4">
+  Maximum time in seconds to wait for data reception
+  
+  **Environment variable:** `FTS_MAX_RECEPTION_TIME`
+</ParamField>
+
+<ParamField path="LogLevel" type="string" default="info">
+  Logging level for the server. Valid values: `debug`, `info`, `warning`, `error`, `critical`
+  
+  **Environment variable:** `FTS_LOG_LEVEL`
+</ParamField>
+
+<ParamField path="ConnectionMessage" type="string" default="Welcome to FreeTAKServer {version}. The Parrot is not dead. It's just resting">
+  Message sent to clients upon successful connection. Set to `None` to disable.
+  
+  **Environment variable:** `FTS_CONNECTION_MESSAGE`
+</ParamField>
+
+<ParamField path="EmergencyRadius" type="integer" default="0">
+  Radius in meters within which users will receive emergency notifications. Set to `0` for unlimited range.
+  
+  **Environment variable:** `FTS_EMERGENCY_RADIUS`
+</ParamField>
+
+## Network Configuration
+
+Network addresses and port settings for various services.
+
+<ParamField path="CoTServicePort" type="integer" default="8087">
+  TCP port for unencrypted CoT (Cursor on Target) service
+  
+  **Environment variable:** `FTS_COT_PORT`
+</ParamField>
+
+<ParamField path="SSLCoTServicePort" type="integer" default="8089">
+  TCP port for SSL/TLS encrypted CoT service
+  
+  **Environment variable:** `FTS_SSLCOT_PORT`
+</ParamField>
+
+<ParamField path="HTTPTakAPIPort" type="integer" default="8080">
+  HTTP port for TAK API service (unencrypted)
+  
+  **Environment variable:** `FTS_HTTP_TAK_API_PORT`
+</ParamField>
+
+<ParamField path="HTTPSTakAPIPort" type="integer" default="8443">
+  HTTPS port for TAK API service (encrypted)
+  
+  **Environment variable:** `FTS_HTTPS_TAK_API_PORT`
+</ParamField>
+
+<ParamField path="APIPort" type="integer" default="19023">
+  Port for the REST API service
+  
+  **Environment variable:** `FTS_API_PORT`
+</ParamField>
+
+<ParamField path="APIIP" type="string" default="0.0.0.0">
+  IP address for the REST API service to bind to. Use `0.0.0.0` to listen on all interfaces.
+  
+  **Environment variable:** `FTS_API_ADDRESS`
+</ParamField>
+
+<ParamField path="FederationPort" type="integer" default="9000">
+  Port for federation service
+  
+  **Environment variable:** `FTS_FED_PORT`
+</ParamField>
+
+<ParamField path="DataPackageServiceDefaultIP" type="string" default="auto-detected">
+  IP address used for data package service. Auto-detected by default. **Must be set correctly for private data packages to work.**
+  
+  **Environment variable:** `FTS_DP_ADDRESS`
+</ParamField>
+
+<ParamField path="UserConnectionIP" type="string" default="auto-detected">
+  IP address that clients should use to connect. Auto-detected by default. Should match the IP used in TAK device connection settings.
+  
+  **Environment variable:** `FTS_USER_ADDRESS`
+</ParamField>
+
+<ParamField path="CLIIP" type="string" default="127.0.0.1">
+  IP address for CLI access
+</ParamField>
+
+<ParamField path="AllowCLIIPs" type="list" default="[127.0.0.1]">
+  List of IP addresses allowed to access the CLI interface
+  
+  **Environment variable:** `FTS_CLI_WHITELIST` (colon or comma separated)
+</ParamField>
+
+## Routing and Integration
+
+Configuration for the internal message routing and integration system.
+
+<ParamField path="NumRoutingWorkers" type="integer" default="3">
+  Number of routing worker processes to spawn for handling messages
+  
+  **Environment variable:** `FTS_NUM_ROUTING_WORKERS`
+</ParamField>
+
+<ParamField path="RoutingProxySubscriberPort" type="integer" default="19030">
+  Port for routing proxy to subscribe to requests
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_SUBSCRIBE_PORT`
+</ParamField>
+
+<ParamField path="RoutingProxySubscriberIP" type="string" default="127.0.0.1">
+  IP address for routing proxy subscriber
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_SUBSCRIBE_IP`
+</ParamField>
+
+<ParamField path="RoutingProxyPublisherPort" type="integer" default="19032">
+  Port for routing proxy to publish responses
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_PUBLISHER_PORT`
+</ParamField>
+
+<ParamField path="RoutingProxyPublisherIP" type="string" default="127.0.0.1">
+  IP address for routing proxy publisher
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_PUBLISHER_IP`
+</ParamField>
+
+<ParamField path="RoutingProxyRequestServerPort" type="integer" default="19031">
+  Port for routing proxy to send requests to workers
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_SERVER_PORT`
+</ParamField>
+
+<ParamField path="RoutingProxyRequestServerIP" type="string" default="127.0.0.1">
+  IP address for routing proxy request server
+  
+  **Environment variable:** `FTS_ROUTING_PROXY_SERVER_IP`
+</ParamField>
+
+<ParamField path="IntegrationManagerPullerPort" type="integer" default="19033">
+  Port for integration manager to receive worker responses
+  
+  **Environment variable:** `FTS_INTEGRATION_MANAGER_PULLER_PORT`
+</ParamField>
+
+<ParamField path="IntegrationManagerPullerAddress" type="string" default="127.0.0.1">
+  Address for integration manager puller
+  
+  **Environment variable:** `FTS_INTEGRATION_MANAGER_PULLER_ADDRESS`
+</ParamField>
+
+<ParamField path="IntegrationManagerPublisherPort" type="integer" default="19034">
+  Port for integration manager to publish messages
+  
+  **Environment variable:** `FTS_INTEGRATION_MANAGER_PUBLISHER_PORT`
+</ParamField>
+
+<ParamField path="IntegrationManagerPublisherAddress" type="string" default="127.0.0.1">
+  Address for integration manager publisher
+  
+  **Environment variable:** `FTS_INTEGRATION_MANAGER_PUBLISHER_ADDRESS`
+</ParamField>
+
+## Filesystem Paths
+
+Paths for data persistence, logs, and certificates.
+
+<ParamField path="persistencePath" type="string" default="/opt/fts">
+  Root directory for all FreeTAKServer persistent data
+  
+  **Environment variable:** `FTS_PERSISTENCE_PATH`
+</ParamField>
+
+<ParamField path="DBFilePath" type="string" default="/opt/fts/FTSDataBase.db">
+  Path to the SQLite database file
+  
+  **Environment variable:** `FTS_DB_PATH`
+</ParamField>
+
+<ParamField path="SaveCoTToDB" type="boolean" default="true">
+  Whether to save Cursor on Target (CoT) messages to the database
+  
+  **Environment variable:** `FTS_COT_TO_DB`
+</ParamField>
+
+<ParamField path="LogFilePath" type="string" default="/opt/fts/Logs">
+  Directory for server log files
+  
+  **Environment variable:** `FTS_LOGFILE_PATH`
+</ParamField>
+
+<ParamField path="DataPackageFilePath" type="string" default="/opt/fts/FreeTAKServerDataPackageFolder">
+  Directory for storing uploaded data packages
+  
+  **Environment variable:** `FTS_DATAPACKAGE_PATH`
+</ParamField>
+
+<ParamField path="certsPath" type="string" default="/opt/fts/certs">
+  Directory containing SSL/TLS certificates
+  
+  **Environment variable:** `FTS_CERTS_PATH`
+</ParamField>
+
+<ParamField path="ClientPackages" type="string" default="/opt/fts/certs/clientPackages">
+  Directory for backing up client certificate packages
+  
+  **Environment variable:** `FTS_CLIENT_PACKAGES_PATH`
+</ParamField>
+
+<ParamField path="EnterpriseSyncPath" type="string" default="/opt/fts/enterprise_sync">
+  Directory for TAK Enterprise Sync data
+</ParamField>
+
+<ParamField path="ExCheckMainPath" type="string" default="/opt/fts/ExCheck">
+  Root directory for ExCheck (checklist) data
+  
+  **Environment variable:** `FTS_EXCHECK_PATH`
+</ParamField>
+
+<ParamField path="ExCheckFilePath" type="string" default="/opt/fts/ExCheck/template">
+  Directory for ExCheck templates
+  
+  **Environment variable:** `FTS_EXCHECK_TEMPLATE_PATH`
+</ParamField>
+
+<ParamField path="ExCheckChecklistFilePath" type="string" default="/opt/fts/ExCheck/checklist">
+  Directory for ExCheck checklists
+  
+  **Environment variable:** `FTS_EXCHECK_CHECKLIST_PATH`
+</ParamField>
+
+<ParamField path="MainPath" type="string" default="auto-detected">
+  Root path of the FreeTAKServer installation
+  
+  **Environment variable:** `FTS_MAINPATH`
+</ParamField>
+
+<ParamField path="UserPersistencePath" type="string" default="/opt/fts/user_persistence.txt">
+  Path to user persistence file
+</ParamField>
+
+## Component Paths
+
+Configuration for locating core and extended components.
+
+<ParamField path="CoreComponentsPath" type="string" default="{MainPath}/core">
+  Path to core components
+  
+  **Environment variable:** `FTS_CORE_COMPONENTS_PATH`
+</ParamField>
+
+<ParamField path="CoreComponentsImportRoot" type="string" default="FreeTAKServer.core">
+  Import root for core components
+  
+  **Environment variable:** `FTS_CORE_COMPONENTS_IMPORT_ROOT`
+</ParamField>
+
+<ParamField path="InternalComponentsPath" type="string" default="{MainPath}/components/core">
+  Path to internal components
+  
+  **Environment variable:** `FTS_INTERNAL_COMPONENTS_PATH`
+</ParamField>
+
+<ParamField path="InternalComponentsImportRoot" type="string" default="FreeTAKServer.components.core">
+  Import root for internal components
+  
+  **Environment variable:** `FTS_INTERNAL_COMPONENTS_IMPORT_ROOT`
+</ParamField>
+
+<ParamField path="ExternalComponentsPath" type="string" default="{MainPath}/components/extended">
+  Path to external/extended components
+  
+  **Environment variable:** `FTS_EXTERNAL_COMPONENTS_PATH`
+</ParamField>
+
+<ParamField path="ExternalComponentsImportRoot" type="string" default="FreeTAKServer.components.extended">
+  Import root for external components
+  
+  **Environment variable:** `FTS_EXTERNAL_COMPONENTS_IMPORT_ROOT`
+</ParamField>
+
+## Example Configurations
+
+### Development Setup
+
+```yaml
+System:
+  FTS_LOG_LEVEL: "debug"
+  FTS_MAINLOOP_DELAY: 50
+  FTS_CONNECTION_MESSAGE: "Development Server"
+
+Addresses:
+  FTS_COT_PORT: 8087
+  FTS_API_PORT: 19023
+  FTS_API_ADDRESS: "127.0.0.1"
+
+Filesystem:
+  FTS_PERSISTENCE_PATH: "./dev_data"
+  FTS_COT_TO_DB: true
+```
+
+### Production Setup
+
+```yaml
+System:
+  FTS_SECRET_KEY: "your-random-secret-key-here"
+  FTS_NODE_ID: "production-fts-01"
+  FTS_LOG_LEVEL: "info"
+  FTS_OPTIMIZE_API: true
+
+Addresses:
+  FTS_COT_PORT: 8087
+  FTS_SSLCOT_PORT: 8089
+  FTS_API_PORT: 19023
+  FTS_API_ADDRESS: "0.0.0.0"
+  FTS_USER_ADDRESS: "your-public-ip"
+  FTS_DP_ADDRESS: "your-public-ip"
+
+Filesystem:
+  FTS_PERSISTENCE_PATH: "/opt/fts"
+  FTS_COT_TO_DB: true
+
+Certs:
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/server.pem"
+  FTS_CADIR: "/opt/fts/certs/ca.pem"
+```
+
+### Docker/Container Setup
+
+```bash
+docker run -d \
+  -e FTS_COT_PORT=8087 \
+  -e FTS_API_PORT=19023 \
+  -e FTS_LOG_LEVEL=info \
+  -e FTS_PERSISTENCE_PATH=/data \
+  -e FTS_USER_ADDRESS=192.168.1.100 \
+  -v /host/fts-data:/data \
+  -p 8087:8087 \
+  -p 19023:19023 \
+  freetakteam/freetakserver
+```
+
+## Configuration Validation
+
+FreeTAKServer validates paths specified in configuration to ensure they are accessible and writable. If a path cannot be accessed, the server will exit with an error message.
+
+### Path Sanitization
+
+All paths ending with `PATH` or `DIR` in the YAML configuration are automatically sanitized and validated:
+- Normalized to prevent directory traversal
+- Checked for existence
+- Checked for write permissions
+
+## Best Practices
+
+<Warning>
+  Always change the default `SecretKey` in production environments. Use a cryptographically random string.
+</Warning>
+
+<Tip>
+  Set `DataPackageServiceDefaultIP` and `UserConnectionIP` to your server's public IP address or domain name for proper data package functionality.
+</Tip>
+
+<Note>
+  The `MainLoopDelay` setting directly impacts CPU usage vs. responsiveness. Test different values to find the right balance for your deployment.
+</Note>
+
+- Use environment variables for sensitive configuration like secret keys
+- Keep YAML configuration files outside the web root
+- Regularly back up your persistence path (`/opt/fts` by default)
+- Use appropriate log levels: `debug` for development, `info` or `warning` for production
+- Ensure all paths have proper filesystem permissions

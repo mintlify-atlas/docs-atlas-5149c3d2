@@ -1,0 +1,521 @@
+---
+title: Federation Setup
+description: Configure federation to connect multiple FreeTAKServer instances for distributed operations
+---
+
+Federation enables multiple FreeTAKServer instances to share CoT data, allowing users connected to different servers to see each other and exchange information.
+
+## Overview
+
+FreeTAKServer federation provides:
+
+- **Server-to-Server Communication**: Connect FTS instances across different networks
+- **Distributed Operations**: Support geographically dispersed teams
+- **Load Balancing**: Distribute client connections across servers
+- **Resilience**: Maintain operations if one server goes down
+- **Data Sharing**: Selective CoT data exchange between federated servers
+
+## Federation Architecture
+
+```text
+FTS Server A (HQ)          FTS Server B (Field)
+  ├─ Clients 1-10    <──Federation──>   ├─ Clients 11-20
+  ├─ Data Packages                       ├─ Data Packages
+  └─ Port 9000                          └─ Port 9000
+           │                                    │
+           └────────── Federation ──────────────┘
+                    (SSL/TLS Encrypted)
+```
+
+## Prerequisites
+
+Before setting up federation:
+
+- Two or more FreeTAKServer instances installed and running
+- Network connectivity between servers (port 9000 accessible)
+- SSL certificates configured on all servers
+- Server IP addresses or hostnames known
+
+## Quick Start
+
+<Steps>
+
+### Configure Federation on Server A
+
+Edit the configuration file or set environment variables:
+
+<CodeGroup>
+```yaml FTSConfig.yaml
+System:
+  FTS_NODE_ID: "server_a_hq_node"
+
+Addresses:
+  FTS_FED_PORT: 9000
+  FTS_USER_ADDRESS: "server-a.example.com"
+
+Certs:
+  FTS_FEDERATION_CERTDIR: /opt/fts/certs/server.pem
+  FTS_FEDERATION_KEYDIR: /opt/fts/certs/server.key
+  FTS_FEDERATION_KEYPASS: "federation_password"
+```
+
+```bash Environment Variables
+export FTS_FED_PORT=9000
+export FTS_NODE_ID="server_a_hq_node"
+export FTS_FED_PASSWORD="federation_password"
+export FTS_FEDERATION_CERTDIR="/opt/fts/certs/server.pem"
+export FTS_FEDERATION_KEYDIR="/opt/fts/certs/server.key"
+```
+</CodeGroup>
+
+### Configure Federation on Server B
+
+<CodeGroup>
+```yaml FTSConfig.yaml
+System:
+  FTS_NODE_ID: "server_b_field_node"
+
+Addresses:
+  FTS_FED_PORT: 9000
+  FTS_USER_ADDRESS: "server-b.example.com"
+
+Certs:
+  FTS_FEDERATION_CERTDIR: /opt/fts/certs/server.pem
+  FTS_FEDERATION_KEYDIR: /opt/fts/certs/server.key
+  FTS_FEDERATION_KEYPASS: "federation_password"
+```
+
+```bash Environment Variables
+export FTS_FED_PORT=9000
+export FTS_NODE_ID="server_b_field_node"
+export FTS_FED_PASSWORD="federation_password"
+export FTS_FEDERATION_CERTDIR="/opt/fts/certs/server.pem"
+export FTS_FEDERATION_KEYDIR="/opt/fts/certs/server.key"
+```
+</CodeGroup>
+
+### Establish Federation Connection
+
+Use the FTS API to create federation between servers:
+
+```bash
+# On Server A, create federation to Server B
+curl -X POST http://localhost:19023/api/federation/connect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "server-b.example.com",
+    "port": 9000,
+    "initiator": "server_a_hq_node",
+    "protocol": "ssl"
+  }'
+```
+
+Or use the REST API from Server B to connect to Server A.
+
+### Verify Federation
+
+Check federation status:
+
+```bash
+curl http://localhost:19023/api/federation/status
+```
+
+Expected response:
+```json
+{
+  "federations": [
+    {
+      "remote_server": "server-b.example.com:9000",
+      "status": "connected",
+      "node_id": "server_b_field_node",
+      "last_heartbeat": "2026-03-04T10:30:00Z"
+    }
+  ]
+}
+```
+
+</Steps>
+
+## Federation Configuration Reference
+
+### Configuration Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `FTS_FED_PORT` | 9000 | Port for federation connections |
+| `FTS_NODE_ID` | auto-generated | Unique identifier for this server |
+| `FTS_FED_PASSWORD` | "defaultpass" | Password for federation authentication |
+| `FTS_FEDERATION_CERTDIR` | `/opt/fts/certs/server.pem` | Federation SSL certificate |
+| `FTS_FEDERATION_KEYDIR` | `/opt/fts/certs/server.key` | Federation SSL key |
+| `FTS_FEDERATION_KEYPASS` | "defaultpass" | Password for federation key |
+
+### Environment Variables
+
+From `MainConfig.py`:
+
+```python
+# Federation configuration from source
+"FederationPort": {"default": 9000, "type": int}
+"federationKeyPassword": {"default": "defaultpass", "type": str}
+"federationCert": {"default": Path(rf"{PERSISTENCE_PATH}/certs/server.pem")}
+"federationKey": {"default": Path(rf"{PERSISTENCE_PATH}/certs/server.key")}
+```
+
+## Federation Security
+
+### SSL/TLS for Federation
+
+Federation uses the same SSL certificates as the main server:
+
+```bash
+# Verify certificates exist
+ls -la /opt/fts/certs/server.pem
+ls -la /opt/fts/certs/server.key
+
+# Check certificate validity
+openssl x509 -in /opt/fts/certs/server.pem -noout -dates
+```
+
+### Authentication
+
+Federation connections authenticate using:
+
+1. **SSL Certificate Validation**: Mutual TLS verification
+2. **Node ID**: Unique server identifier
+3. **Federation Password**: Shared secret for additional security
+
+<Warning>
+**Security best practices:**
+
+- Use strong, unique federation passwords
+- Keep federation certificates separate from client certificates
+- Restrict federation port (9000) to known server IPs
+- Monitor federation logs for unauthorized connection attempts
+- Rotate federation passwords regularly
+</Warning>
+
+## Firewall Configuration
+
+### Open Federation Port
+
+<CodeGroup>
+```bash firewalld
+# Allow federation port
+sudo firewall-cmd --permanent --add-port=9000/tcp
+sudo firewall-cmd --reload
+
+# Verify
+sudo firewall-cmd --list-ports
+```
+
+```bash ufw
+# Allow federation port
+sudo ufw allow 9000/tcp
+
+# Verify
+sudo ufw status
+```
+
+```bash iptables
+# Allow federation port
+sudo iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
+sudo iptables-save > /etc/iptables/rules.v4
+```
+</CodeGroup>
+
+### Restrict to Specific IPs
+
+For enhanced security, allow only known federation servers:
+
+```bash
+# firewalld - allow only specific server
+sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="203.0.113.10" port port="9000" protocol="tcp" accept'
+sudo firewall-cmd --reload
+
+# ufw - allow only specific server
+sudo ufw allow from 203.0.113.10 to any port 9000
+
+# iptables - allow only specific server
+sudo iptables -A INPUT -p tcp -s 203.0.113.10 --dport 9000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 9000 -j DROP
+```
+
+## Docker Federation Setup
+
+### Docker Compose Configuration
+
+```yaml
+# Server A - compose.yaml
+services:
+  freetakserver:
+    image: freetakserver:latest
+    environment:
+      FTS_NODE_ID: "docker_server_a"
+      FTS_FED_PORT: 9000
+      FTS_FED_PASSWORD: "secure_federation_pass"
+      FTS_USER_ADDRESS: "server-a.example.com"
+    ports:
+      - "8087:8087"  # CoT
+      - "8089:8089"  # SSL CoT
+      - "9000:9000"  # Federation
+    volumes:
+      - fts-data:/opt/fts
+
+volumes:
+  fts-data:
+```
+
+```yaml
+# Server B - compose.yaml
+services:
+  freetakserver:
+    image: freetakserver:latest
+    environment:
+      FTS_NODE_ID: "docker_server_b"
+      FTS_FED_PORT: 9000
+      FTS_FED_PASSWORD: "secure_federation_pass"
+      FTS_USER_ADDRESS: "server-b.example.com"
+    ports:
+      - "8087:8087"
+      - "8089:8089"
+      - "9000:9000"
+    volumes:
+      - fts-data:/opt/fts
+
+volumes:
+  fts-data:
+```
+
+### Establish Federation Between Containers
+
+```bash
+# From Server A container
+docker exec freetakserver curl -X POST http://localhost:19023/api/federation/connect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "server-b.example.com",
+    "port": 9000,
+    "initiator": "docker_server_a"
+  }'
+```
+
+## Federation Data Flow
+
+### CoT Routing
+
+When federation is active:
+
+1. Client sends CoT to local server
+2. Local server processes and stores CoT
+3. CoT is forwarded to federated servers
+4. Federated servers distribute to their clients
+5. All clients across federation see the CoT
+
+```text
+Client A → Server A → Server B → Client B
+   │                      │
+   └──────────────────────┴────→ All clients receive CoT
+```
+
+### Selective Filtering
+
+Configure which CoT types are federated (future feature):
+
+```python
+# Federation filtering configuration (planned)
+federation_filter = {
+    "allow_types": [
+        "a-f-G",  # Friendly ground
+        "b-m-p",  # Markers
+        "t-x"     # Chat messages
+    ],
+    "block_types": [
+        "a-h"     # Hostile contacts
+    ]
+}
+```
+
+## Troubleshooting
+
+### Federation Won't Connect
+
+<Note>
+**Common issues:**
+
+1. **Port not open**
+   ```bash
+   # Test connectivity
+   telnet server-b.example.com 9000
+   ```
+
+2. **Certificate mismatch**
+   ```bash
+   # Verify certificates
+   openssl s_client -connect server-b.example.com:9000 \
+     -cert /opt/fts/certs/server.pem \
+     -key /opt/fts/certs/server.key
+   ```
+
+3. **Wrong password**
+   - Verify `FTS_FED_PASSWORD` matches on both servers
+   - Check logs for authentication errors
+
+4. **Firewall blocking**
+   ```bash
+   # Check if port is listening
+   sudo netstat -tlnp | grep 9000
+   ```
+</Note>
+
+### Check Federation Logs
+
+```bash
+# Monitor federation activity
+tail -f /opt/fts/Logs/FTS.log | grep -i federation
+
+# Check for connection errors
+grep -i "federation.*error" /opt/fts/Logs/FTS.log
+```
+
+### Verify Federation Component
+
+Check federation service is loaded:
+
+```bash
+# List loaded components
+ls -la /opt/fts/FreeTAKServer/components/extended/federation/
+
+# Verify federation controller
+find /opt/fts -name "*federation*controller*"
+```
+
+### Debug Federation Connection
+
+Enable debug logging:
+
+```bash
+export FTS_LOG_LEVEL="debug"
+python3 -m FreeTAKServer.controllers.services.FTS
+```
+
+Monitor debug output:
+```text
+DEBUG:FederationController:Attempting federation connection to server-b.example.com:9000
+DEBUG:FederationController:SSL handshake successful
+DEBUG:FederationController:Federation authenticated with node_id: server_b_field_node
+INFO:FederationController:Federation established with server-b.example.com:9000
+```
+
+## Advanced Federation
+
+### Multi-Server Federation
+
+Connect more than two servers:
+
+```text
+        Server A (HQ)
+        /          \
+   Server B      Server C
+   (Region 1)    (Region 2)
+        \          /
+        Server D
+        (Mobile)
+```
+
+Each server connects to others:
+
+```bash
+# Server A connects to B, C, D
+curl -X POST http://localhost:19023/api/federation/connect \
+  -d '{"address": "server-b.example.com", "port": 9000}'
+curl -X POST http://localhost:19023/api/federation/connect \
+  -d '{"address": "server-c.example.com", "port": 9000}'
+curl -X POST http://localhost:19023/api/federation/connect \
+  -d '{"address": "server-d.example.com", "port": 9000}'
+```
+
+### Hub-and-Spoke Topology
+
+Central hub server with regional spokes:
+
+```text
+    Region 1 ──→ HQ Server ←── Region 2
+                     ↑
+                  Region 3
+```
+
+Only HQ server federates with all regions. Regions don't connect to each other directly.
+
+### Persistent Federation
+
+Ensure federation reconnects after restart:
+
+```python
+# Add to startup script or systemd service
+import requests
+import time
+
+def ensure_federation():
+    """Establish federation on startup"""
+    time.sleep(30)  # Wait for FTS to fully start
+    
+    federations = [
+        {"address": "server-b.example.com", "port": 9000},
+        {"address": "server-c.example.com", "port": 9000}
+    ]
+    
+    for fed in federations:
+        try:
+            response = requests.post(
+                "http://localhost:19023/api/federation/connect",
+                json=fed,
+                timeout=10
+            )
+            print(f"Federation to {fed['address']}: {response.status_code}")
+        except Exception as e:
+            print(f"Failed to federate with {fed['address']}: {e}")
+
+if __name__ == "__main__":
+    ensure_federation()
+```
+
+## Monitoring Federation
+
+### Federation Health Check
+
+```bash
+#!/bin/bash
+# federation-health.sh
+
+FED_SERVERS=("server-b.example.com:9000" "server-c.example.com:9000")
+
+for server in "${FED_SERVERS[@]}"; do
+    if timeout 5 bash -c "</dev/tcp/${server/:/ }" 2>/dev/null; then
+        echo "✓ $server - Connected"
+    else
+        echo "✗ $server - Failed"
+    fi
+done
+```
+
+### Metrics Collection
+
+Monitor federation metrics:
+
+```bash
+# Count federated servers
+curl -s http://localhost:19023/api/federation/status | jq '.federations | length'
+
+# List connected federations
+curl -s http://localhost:19023/api/federation/status | jq -r '.federations[].remote_server'
+
+# Check last heartbeat
+curl -s http://localhost:19023/api/federation/status | jq -r '.federations[] | "\(.remote_server): \(.last_heartbeat)"'
+```
+
+## Next Steps
+
+- [Configure SSL](/guides/ssl-configuration) for secure federation
+- [Monitor server performance](/operations/monitoring) across federation
+- [Deploy with Docker](/guides/docker-deployment) for containerized federation
+- [Set up load balancing](/advanced/load-balancing) with federated servers

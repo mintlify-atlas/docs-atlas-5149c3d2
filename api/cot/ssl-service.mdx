@@ -1,0 +1,390 @@
+---
+title: SSL CoT Service
+description: Documentation for FreeTAKServer's SSL/TLS Cursor-on-Target service
+---
+
+The SSL CoT Service provides encrypted SSL/TLS connections for secure Cursor-on-Target (CoT) communications between FreeTAKServer and ATAK clients.
+
+## Overview
+
+The SSL CoT Service (`SSLCoTServiceMain`) handles secure CoT communications over SSL/TLS encrypted connections. It provides certificate-based authentication and encrypted message transport.
+
+**Default Port:** `8089`
+
+**Protocol:** SSL/TLS over TCP
+
+**Message Format:** XML (CoT)
+
+**Authentication:** X.509 certificate-based (mutual TLS)
+
+## Service Architecture
+
+### Main Class
+
+`FreeTAKServer.services.ssl_cot_service.ssl_cot_service_main.SSLCoTServiceMain`
+
+The SSL CoT service extends `DigitalPyService` and provides:
+- SSL/TLS socket creation with certificate verification
+- Secure connection handling
+- Encrypted message reception and transmission
+- Certificate-based client authentication
+- Component routing and response broadcasting
+
+### Key Components
+
+#### SSL Socket Controller
+
+**Class:** `SSLSocketController` (controllers/SSLSocketController.py:8)
+
+Manages SSL/TLS socket configuration:
+
+```python
+class SSLSocketController(MainSocketController):
+    def createSocket(self):
+        context = self.get_context(ssl.PROTOCOL_TLS_SERVER)
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.verify_flags = ssl.VERIFY_CRL_CHECK_LEAF
+        context.load_cert_chain(
+            certfile=self.MainSocket.pemDir,
+            keyfile=self.MainSocket.keyDir,
+            password=self.MainSocket.password
+        )
+        # ... socket creation
+```
+
+#### Connection Model
+
+**Class:** `SSLCoTConnection` (model/ssl_cot_connection.py:11)
+
+```python
+class SSLCoTConnection(Connection):
+    def __init__(self, oid=None) -> None:
+        super().__init__("ssl_cot_connection", oid)
+        self._service_id = SERVICE_NAME
+        self._protocol = XML
+        self._model_object: Event = None
+        self._sock: socket = None
+```
+
+Properties:
+- `service_id`: "ssl_cot_service"
+- `protocol`: "XML"
+- `model_object`: Event domain object
+- `sock`: SSL-wrapped socket instance
+
+## SSL/TLS Configuration
+
+### Certificate Requirements
+
+The SSL CoT service requires:
+
+1. **Server Certificate** - PEM format certificate for the server
+2. **Server Private Key** - Private key for the server certificate
+3. **CA Certificate** - Certificate Authority for client verification
+4. **CRL File** - Certificate Revocation List for checking revoked certificates
+
+### SSL Context Configuration
+
+**Method:** `get_context()` (controllers/SSLSocketController.py:12)
+
+```python
+def get_context(self, protocol):
+    context = ssl.SSLContext(protocol=protocol)
+    context.load_verify_locations(cafile=self.MainSocket.CA)
+    context.load_verify_locations(cafile=self.MainSocket.CRLFile)
+    return context
+```
+
+### Verification Mode
+
+**Configuration** (controllers/SSLSocketController.py:21-22):
+
+```python
+context.verify_mode = ssl.CERT_REQUIRED
+context.verify_flags = ssl.VERIFY_CRL_CHECK_LEAF
+```
+
+- `CERT_REQUIRED`: Client must present a valid certificate
+- `VERIFY_CRL_CHECK_LEAF`: Checks if client certificate is revoked
+
+### Client Socket Wrapping
+
+**Method:** `wrap_client_socket()` (controllers/SSLSocketController.py:32)
+
+Wraps accepted sockets with SSL:
+
+```python
+def wrap_client_socket(self, socket):
+    context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_SERVER)
+    context.load_verify_locations(cafile=self.MainSocket.CA)
+    context.options |= ssl.OP_NO_SSLv3
+    context.options |= ssl.OP_NO_SSLv2
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.verify_flags = ssl.VERIFY_CRL_CHECK_LEAF
+    context.load_cert_chain(
+        certfile=self.MainSocket.pemDir,
+        keyfile=self.MainSocket.keyDir,
+        password=self.MainSocket.password
+    )
+    sock = context.wrap_socket(socket, server_side=True)
+    return sock
+```
+
+## Connection Handling
+
+### Service Initialization
+
+**Method:** `start()` (ssl_cot_service_main.py:131)
+
+```python
+def start(self, IP, CoTPort, Event, clientDataPipe,
+          ReceiveConnectionKillSwitch, RestAPIPipe,
+          clientDataRecvPipe, factory, tracing_provider_instance):
+    self.SSLSocketController = SSLSocketController()
+    self.SSLSocketController.changeIP(IP)
+    self.SSLSocketController.changePort(CoTPort)
+    sock = self.SSLSocketController.createSocket()
+    pool = ThreadPool(processes=2)  # ThreadPool required for SSL sockets
+```
+
+### Threading Model
+
+The SSL service uses ThreadPool instead of multiprocessing (ssl_cot_service_main.py:165):
+
+```python
+# threadpool is used as it allows the transfer of SSL socket unlike processes
+pool = ThreadPool(processes=2)
+```
+
+SSL sockets cannot be pickled for inter-process communication, requiring thread-based concurrency.
+
+### Connection Reception
+
+**Method:** `handle_connection()` (ssl_cot_service_main.py:755)
+
+```python
+def handle_connection(self, receive_connection_output: RawCoT) -> None:
+    if receive_connection_output == -1:
+        return None
+    
+    client_connection, client_information = \
+        self.client_connection_controller.create_client_connection(
+            receive_connection_output, self.dbController
+        )
+    
+    self.client_connection_controller.save_client_to_db(
+        client_information, self.dbController
+    )
+    
+    # Send IAM request for authentication
+    iam_request = self.client_connection_controller.create_iam_request(
+        client_connection
+    )
+    self.subject_send_request(iam_request, APPLICATION_PROTOCOL)
+```
+
+## Message Processing
+
+### Data Reception
+
+**Class:** `ClientReceptionHandler` (ssl_cot_service_main.py:169)
+
+Handles encrypted message reception:
+
+```python
+clientData = pool.apply_async(
+    ClientReceptionHandler().startup, (self.client_information_queue,)
+)
+```
+
+**Buffer Size:** 1024 bytes (ssl_cot_service_constants.py:3)
+
+### Main Loop
+
+**Method:** `mainRunFunction()` (ssl_cot_service_main.py:471)
+
+The main event loop processes:
+1. New SSL connections
+2. Encrypted client data
+3. Shared data from other services
+4. Component responses for broadcasting
+
+```python
+while event.is_set():
+    # Receive new SSL connections
+    receiveConnectionOutput = receiveConnection.get(timeout=0.01)
+    self.handle_connection(receiveConnectionOutput)
+    
+    # Handle client data
+    clientDataOutput = clientData.get(timeout=0.01)
+    self.handle_regular_data(clientDataOutput)
+    
+    # Broadcast component responses
+    self.broadcast_component_responses()
+```
+
+### Component Handling
+
+**Method:** `component_handler()` (ssl_cot_service_main.py:271)
+
+Routes CoT messages to appropriate components:
+
+```python
+def component_handler(self, xml_cot):
+    dict_cot = self.convert_xml_to_dict(xml_cot)
+    
+    request = ObjectFactory.get_new_instance("request")
+    request.set_format("pickled")
+    
+    human_readable_type = self.get_human_readable_type(dict_cot)
+    request.set_action(human_readable_type)
+    dict_cot["event"]["@type"] = human_readable_type
+    request.set_context("XMLCoT")
+    request.set_sender(self.__class__.__name__.lower())
+    request.set_value("dictionary", dict_cot)
+    
+    self.subject_send_request(request, APPLICATION_PROTOCOL)
+```
+
+## Disconnection Handling
+
+**Method:** `handle_disconnection()` (ssl_cot_service_main.py:734)
+
+SSL disconnection requires closing both SSL and underlying sockets:
+
+```python
+def handle_disconnection(self, client_information):
+    ssl_sock, unwrapped_sock = \
+        self.client_disconnection_controller.get_socks(client_information)
+    
+    self.client_disconnection_controller.delete_client_connection(
+        client_information
+    )
+    
+    # Close both SSL wrapper and underlying socket
+    self.client_disconnection_controller.disconnect_socket(unwrapped_sock)
+    self.client_disconnection_controller.disconnect_socket(ssl_sock)
+    
+    connection_id = self.client_disconnection_controller.get_connection_id(
+        client_information
+    )
+    
+    iam_disconnect_request = \
+        self.client_disconnection_controller.create_iam_disconnect_request(
+            connection_id
+        )
+    self.subject_send_request(iam_disconnect_request, APPLICATION_PROTOCOL)
+```
+
+## Service Metrics
+
+Identical to TCP service (ssl_cot_service_main.py:97-102):
+
+```python
+self.connection_received = 0      # Total SSL connections
+self.sent_message_count = 0       # Encrypted messages sent
+self.received_message_count = 0   # Encrypted messages received
+self.messages_to_core_count = 0   # Messages to core processing
+self.messages_from_core_count = 0 # Messages from core
+self.openSockets = 0              # Active SSL connections
+```
+
+## Configuration
+
+### Service Constants
+
+**File:** `configuration/ssl_cot_service_constants.py`
+
+```python
+SERVICE_NAME = 'ssl_cot_service'
+XML = "XML"
+DATA_RECEPTION_BUFFER_SIZE = 1024
+```
+
+### Port Configuration
+
+**Default Port:** 8089 (MainConfig.py:71)
+
+```python
+"SSLCoTServicePort": {"default": 8089, "type": int}
+```
+
+### Certificate Configuration
+
+Certificates are typically stored in:
+
+```
+{PERSISTENCE_PATH}/certs/
+```
+
+Required files:
+- Server certificate (PEM)
+- Server private key
+- CA certificate
+- Certificate Revocation List (CRL)
+
+## Client Configuration
+
+### ATAK Connection Setup
+
+To connect ATAK clients to the SSL CoT service:
+
+1. **Generate client certificate** using FreeTAKServer's certificate tools
+2. **Install certificate** on ATAK device
+3. **Configure connection**:
+   - Protocol: `ssl://`
+   - Host: FreeTAKServer IP
+   - Port: `8089`
+   - Enable client certificate authentication
+
+**Example connection string:**
+```
+ssl://<server-ip>:8089
+```
+
+### Certificate Generation
+
+**Reference:** `FreeTAKServer.core.util.certificate_generation` (certificate_generation.py:138)
+
+Default SSL port in certificate generation:
+
+```python
+def generate_certificate(
+    cert_password: str = config.password,
+    ssl_port: str = "8089"
+) -> None:
+    # Certificate generation logic
+```
+
+## Security Considerations
+
+### Protocol Security
+
+- **TLS Protocol:** Uses `ssl.PROTOCOL_TLS_SERVER`
+- **Disabled Protocols:** SSLv2, SSLv3 (controllers/SSLSocketController.py:35-36)
+- **Mutual Authentication:** Both server and client certificates verified
+- **CRL Checking:** Revoked certificates rejected
+
+### Best Practices
+
+1. **Use SSL for production** - TCP service should only be used for testing
+2. **Rotate certificates** - Regular certificate renewal
+3. **Maintain CRL** - Keep revocation list updated
+4. **Secure private keys** - Protect server private key with strong password
+5. **Monitor connections** - Review SSL handshake failures
+
+## Connection Type
+
+**Property:** `connection_type` (ssl_cot_service_main.py:189)
+
+```python
+@property
+def connection_type(self):
+    return ConnectionTypes.SSL
+```
+
+## Related Services
+
+- [TCP CoT Service](/api/cot/tcp-service) - Unencrypted TCP CoT connections
+- [CoT Message Format](/api/cot/message-format) - CoT XML message structure
+- Certificate Management - Server certificate generation tools

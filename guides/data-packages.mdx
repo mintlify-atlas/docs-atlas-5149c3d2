@@ -1,0 +1,554 @@
+---
+title: Data Package Management
+description: Upload, share, and manage data packages in FreeTAKServer for maps, imagery, and file distribution
+---
+
+Data packages allow you to share files between TAK clients through FreeTAKServer, including maps, imagery, overlays, and mission packages.
+
+## Overview
+
+FreeTAKServer data package functionality provides:
+
+- **File Upload**: Upload data packages from ATAK, WinTAK, or REST API
+- **Distribution**: Share packages with all connected clients or specific users
+- **Storage**: Persistent storage of uploaded packages
+- **Retrieval**: Download packages on-demand from server
+- **Mission Packages**: Support for TAK mission package format
+- **Enterprise Sync**: Sync data packages across clients
+
+## Data Package Services
+
+FreeTAKServer exposes two data package endpoints:
+
+### HTTP Data Package Service
+
+- **Port**: 8080 (default)
+- **Protocol**: HTTP
+- **Endpoint**: `/Marti/sync/`
+- **Use**: Development, internal networks
+
+### HTTPS Data Package Service
+
+- **Port**: 8443 (default)
+- **Protocol**: HTTPS
+- **Endpoint**: `/Marti/sync/`
+- **Use**: Production deployments
+- **Requires**: SSL certificates
+
+## Configuration
+
+### Server Configuration
+
+<CodeGroup>
+```yaml FTSConfig.yaml
+Addresses:
+  FTS_DP_ADDRESS: "your.server.ip"  # IP clients use to download packages
+  FTS_USER_ADDRESS: "your.server.ip"
+
+Filesystem:
+  FTS_DATAPACKAGE_PATH: /opt/fts/FreeTAKServerDataPackageFolder
+```
+
+```bash Environment Variables
+export FTS_DP_ADDRESS="203.0.113.10"
+export FTS_USER_ADDRESS="203.0.113.10"
+export FTS_DATAPACKAGE_PATH="/opt/fts/FreeTAKServerDataPackageFolder"
+```
+</CodeGroup>
+
+### Configuration from Source
+
+From `MainConfig.py`:
+
+```python
+# Data package configuration
+"DataPackageServiceDefaultIP": {"default": _ip, "type": str}
+"UserConnectionIP": {"default": _ip, "type": str}
+"DataPackageFilePath": {
+    "default": Path(rf"{PERSISTENCE_PATH}/FreeTAKServerDataPackageFolder"),
+    "type": str,
+}
+"HTTPTakAPIPort": {"default": 8080, "type": int}
+"HTTPSTakAPIPort": {"default": 8443, "type": int}
+```
+
+## Uploading Data Packages
+
+### From ATAK Client
+
+<Steps>
+
+### Create Data Package
+
+1. Open ATAK
+2. Select items to include (markers, drawings, routes, etc.)
+3. Tap **Menu → Share → Create Package**
+4. Give package a name and description
+5. Select **Mission Package** format
+
+### Upload to Server
+
+1. With package created, tap **Share**
+2. Select **Send to Server**
+3. Choose your FreeTAKServer connection
+4. Package uploads to server
+5. All connected clients receive notification
+
+### Verify Upload
+
+Check server logs:
+```bash
+tail -f /opt/fts/Logs/FTS.log | grep -i "datapackage\|upload"
+```
+
+</Steps>
+
+### From WinTAK Client
+
+1. Select map items to share
+2. Right-click → **Package and Send**
+3. Configure package options
+4. Select **Send to Server**
+5. Choose FreeTAKServer connection
+6. Click **Send**
+
+### Using REST API
+
+Upload data package via HTTP POST:
+
+```bash
+# Calculate file hash
+FILE_HASH=$(sha256sum mypackage.zip | awk '{print $1}')
+
+# Upload data package
+curl -X POST \
+  "http://your.server.ip:8080/Marti/sync/missionupload?hash=${FILE_HASH}&filename=mypackage.zip&creatorUid=api_user" \
+  -F "assetfile=@mypackage.zip" \
+  -H "Expect: 100-continue"
+
+# Update metadata
+curl -X PUT \
+  "http://your.server.ip:8080/Marti/api/sync/metadata/${FILE_HASH}/tool"
+```
+
+### Using Python
+
+From `certificate_generation.py` source:
+
+```python
+import hashlib
+import requests
+
+def send_data_package(server: str, dp_name: str = "package.zip") -> bool:
+    """
+    Upload data package to FreeTAKServer
+    
+    Args:
+        server: Server IP or hostname
+        dp_name: Path to data package file
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Calculate SHA-256 hash
+    file_hash = hashlib.sha256()
+    block_size = 65536
+    
+    with open(dp_name, 'rb') as f:
+        fb = f.read(block_size)
+        while len(fb) > 0:
+            file_hash.update(fb)
+            fb = f.read(block_size)
+    
+    # Upload package
+    with open(dp_name, 'rb') as f:
+        s = requests.Session()
+        r = s.post(
+            f'http://{server}:8080/Marti/sync/missionupload?'
+            f'hash={file_hash.hexdigest()}&'
+            f'filename={dp_name}&'
+            f'creatorUid=python_uploader',
+            files={"assetfile": f.read()},
+            headers={'Expect': '100-continue'}
+        )
+        
+        if r.status_code == 200:
+            # Update metadata
+            p_r = s.put(
+                f'http://{server}:8080/Marti/api/sync/metadata/{file_hash.hexdigest()}/tool'
+            )
+            return True
+        else:
+            print(f"Upload failed: {r.status_code}")
+            return False
+
+# Usage
+if send_data_package("203.0.113.10", "mission.zip"):
+    print("Package uploaded successfully")
+else:
+    print("Upload failed")
+```
+
+## Data Package Types
+
+### Mission Package
+
+Standard TAK mission package format:
+
+```text
+package.zip
+├── MANIFEST/
+│   └── manifest.xml
+└── content/
+    ├── map.jpg
+    ├── overlay.kml
+    └── waypoints.cot
+```
+
+**Manifest structure:**
+
+```xml
+<MissionPackageManifest version="2">
+   <Configuration>
+      <Parameter name="uid" value="unique-package-id"/>
+      <Parameter name="name" value="Mission Package Name"/>
+      <Parameter name="onReceiveDelete" value="false"/>
+   </Configuration>
+   <Contents>
+      <Content ignore="false" zipEntry="content/map.jpg"/>
+      <Content ignore="false" zipEntry="content/overlay.kml"/>
+      <Content ignore="false" zipEntry="content/waypoints.cot"/>
+   </Contents>
+</MissionPackageManifest>
+```
+
+### Data Package
+
+Simple file sharing package:
+
+```text
+data.zip
+├── document.pdf
+├── image.png
+└── notes.txt
+```
+
+### Certificate Package
+
+Client connection configuration (auto-generated):
+
+```text
+Client.zip
+├── manifest.xml
+├── fts.pref
+├── server.p12
+└── Client.p12
+```
+
+## Retrieving Data Packages
+
+### List Available Packages
+
+```bash
+# Get all data packages
+curl http://your.server.ip:8080/Marti/api/sync/metadata/all
+```
+
+Response:
+```json
+{
+  "packages": [
+    {
+      "hash": "a1b2c3d4e5f6...",
+      "filename": "mission_alpha.zip",
+      "size": 1048576,
+      "submitter": "field_user_1",
+      "timestamp": "2026-03-04T10:30:00Z",
+      "tool": "public"
+    }
+  ]
+}
+```
+
+### Download Package
+
+```bash
+# Download by hash
+curl -O http://your.server.ip:8080/Marti/api/sync/metadata/{hash}/content
+
+# Download by filename
+curl -O http://your.server.ip:8080/Marti/sync/content?hash={hash}
+```
+
+### From ATAK
+
+1. Open ATAK
+2. Tap **Menu → Data Management → Mission Package Tool**
+3. Tap **Refresh** to see server packages
+4. Select package to download
+5. Tap **Download**
+6. Package downloads and imports automatically
+
+## Data Package Storage
+
+### Directory Structure
+
+```bash
+/opt/fts/FreeTAKServerDataPackageFolder/
+├── a1b2c3d4e5f6.../  # Package hash
+│   └── mission_alpha.zip
+├── f6e5d4c3b2a1.../
+│   └── overlay.zip
+└── metadata.db      # Package metadata (future)
+```
+
+### Storage Management
+
+Check storage usage:
+
+```bash
+# Check data package directory size
+du -sh /opt/fts/FreeTAKServerDataPackageFolder/
+
+# List packages by size
+du -h /opt/fts/FreeTAKServerDataPackageFolder/* | sort -h
+
+# Count total packages
+ls -1 /opt/fts/FreeTAKServerDataPackageFolder/ | wc -l
+```
+
+Clean old packages:
+
+```bash
+# Remove packages older than 30 days
+find /opt/fts/FreeTAKServerDataPackageFolder/ -type f -mtime +30 -delete
+
+# Remove packages larger than 100MB
+find /opt/fts/FreeTAKServerDataPackageFolder/ -type f -size +100M -delete
+```
+
+## Enterprise Sync
+
+Enterprise Sync provides advanced data package management:
+
+### Configuration
+
+```python
+# From MainConfig.py
+"EnterpriseSyncPath": {
+    "default": Path(rf"{PERSISTENCE_PATH}/enterprise_sync"),
+    "type": str,
+}
+```
+
+### Directory Structure
+
+```bash
+/opt/fts/enterprise_sync/
+├── missions/
+│   ├── mission_1/
+│   └── mission_2/
+└── content/
+    └── shared_files/
+```
+
+## Data Package Workflows
+
+### Map Distribution
+
+<Steps>
+
+### Prepare Map Imagery
+
+```bash
+# Create georeferenced map package
+# Using GDAL tools
+gdal_translate -of GTiff -co TILED=YES map.png georef_map.tif
+gdalwarp -t_srs EPSG:4326 georef_map.tif final_map.tif
+```
+
+### Create Mission Package
+
+Package map with metadata:
+
+```xml
+<!-- manifest.xml -->
+<MissionPackageManifest version="2">
+   <Configuration>
+      <Parameter name="name" value="Operational Area Map"/>
+   </Configuration>
+   <Contents>
+      <Content zipEntry="maps/area_map.tif"/>
+   </Contents>
+</MissionPackageManifest>
+```
+
+### Upload to Server
+
+```bash
+python3 << 'EOF'
+from certificate_generation import send_data_package
+send_data_package("your.server.ip", "area_map.zip")
+EOF
+```
+
+### Clients Download
+
+All connected clients receive notification and can download the map.
+
+</Steps>
+
+### SOP Distribution
+
+1. Create SOP document (PDF, DOCX, etc.)
+2. Package with reference markers
+3. Upload to server
+4. Field users download and reference
+
+### Imagery Sharing
+
+1. Capture drone/aerial imagery
+2. Georeference images
+3. Create overlay KML
+4. Package and distribute
+5. Clients view imagery in ATAK
+
+## REST API Reference
+
+### Upload Endpoint
+
+```http
+POST /Marti/sync/missionupload?hash={sha256}&filename={name}&creatorUid={user}
+Content-Type: multipart/form-data
+
+--boundary
+Content-Disposition: form-data; name="assetfile"; filename="package.zip"
+Content-Type: application/zip
+
+{binary data}
+--boundary--
+```
+
+### Metadata Endpoint
+
+```http
+PUT /Marti/api/sync/metadata/{hash}/tool
+```
+
+### Download Endpoint
+
+```http
+GET /Marti/sync/content?hash={hash}
+GET /Marti/api/sync/metadata/{hash}/content
+```
+
+### List Endpoint
+
+```http
+GET /Marti/api/sync/metadata/all
+```
+
+## Troubleshooting
+
+### Upload Failures
+
+<Note>
+**Common upload issues:**
+
+1. **Connection refused**
+   ```bash
+   # Verify service is running
+   curl http://your.server.ip:8080/Marti/api/version
+   ```
+
+2. **File too large**
+   - Check server disk space
+   - Verify no file size limits in proxy
+   - Compress packages before upload
+
+3. **Hash mismatch**
+   - Ensure SHA-256 hash is correct
+   - File may be corrupted during transfer
+   - Recalculate hash and retry
+</Note>
+
+### Download Issues
+
+<Warning>
+**If clients can't download packages:**
+
+1. **Wrong IP address**
+   ```bash
+   # Verify FTS_DP_ADDRESS
+   echo $FTS_DP_ADDRESS
+   ```
+
+2. **Firewall blocking port 8080**
+   ```bash
+   sudo firewall-cmd --add-port=8080/tcp --permanent
+   sudo firewall-cmd --reload
+   ```
+
+3. **Package deleted**
+   - Check if file exists in data package directory
+   - Re-upload package if missing
+</Warning>
+
+### Storage Issues
+
+```bash
+# Check available disk space
+df -h /opt/fts/
+
+# Find largest packages
+find /opt/fts/FreeTAKServerDataPackageFolder/ -type f -exec du -h {} + | sort -h | tail -20
+
+# Remove specific package
+rm -rf /opt/fts/FreeTAKServerDataPackageFolder/{hash}/
+```
+
+## Docker Data Packages
+
+### Volume Configuration
+
+```yaml
+services:
+  freetakserver:
+    volumes:
+      - fts-datapackages:/opt/fts/FreeTAKServerDataPackageFolder
+    environment:
+      FTS_DATAPACKAGE_PATH: /opt/fts/FreeTAKServerDataPackageFolder
+      FTS_DP_ADDRESS: "your.server.ip"
+
+volumes:
+  fts-datapackages:
+```
+
+### Extract Packages from Container
+
+```bash
+# Copy package from container
+docker cp freetakserver:/opt/fts/FreeTAKServerDataPackageFolder/{hash}/package.zip ./
+
+# Copy to container
+docker cp ./package.zip freetakserver:/opt/fts/FreeTAKServerDataPackageFolder/{hash}/
+```
+
+## Security Considerations
+
+<Warning>
+**Data package security:**
+
+1. **Malware scanning**: Scan uploaded packages for malicious content
+2. **Access control**: Implement user-based package access (future)
+3. **Encryption**: Use HTTPS (port 8443) for sensitive packages
+4. **Size limits**: Set maximum package size to prevent DoS
+5. **Validation**: Verify package format and content before distribution
+</Warning>
+
+## Next Steps
+
+- [Configure SSL](/guides/ssl-configuration) for secure package transfer
+- [Set up client connections](/guides/connecting-clients) to enable package sharing
+- [Monitor storage](/operations/monitoring) for data package disk usage
+- [Automate package deployment](/advanced/automation) with scripts

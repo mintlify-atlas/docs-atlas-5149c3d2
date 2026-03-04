@@ -1,0 +1,451 @@
+---
+title: SSL/TLS Configuration
+description: Complete guide for setting up SSL/TLS encryption for secure FreeTAKServer connections
+---
+
+This guide covers SSL/TLS setup for FreeTAKServer, including certificate generation, configuration, and deployment for secure client connections.
+
+## Overview
+
+FreeTAKServer uses SSL/TLS to:
+
+- Encrypt CoT data traffic between clients and server
+- Authenticate clients using X.509 certificates
+- Secure data package transfers
+- Protect API communications
+
+The SSL implementation uses:
+- **Port 8089**: SSL CoT Service (default)
+- **Port 8443**: HTTPS Data Package Service
+- **OpenSSL**: Certificate generation and management
+- **Python pyOpenSSL**: SSL socket handling
+
+## Certificate Architecture
+
+FreeTAKServer uses a certificate hierarchy:
+
+```text
+CA (Certificate Authority)
+├── Server Certificate (server.pem, server.key)
+│   └── Used by FTS for SSL connections
+└── Client Certificates (username.pem, username.key)
+    └── One per client (ATAK, WinTAK, ITAK)
+```
+
+## Quick Start
+
+<Steps>
+
+### Generate Certificate Authority
+
+The CA is the root of trust for all certificates. Generate it once:
+
+```python
+from FreeTAKServer.core.util.certificate_generation import AtakOfTheCerts
+
+with AtakOfTheCerts(pwd="your_secure_password") as cert_generator:
+    cert_generator.generate_ca()
+```
+
+This creates:
+- `/opt/fts/certs/ca.pem` - CA certificate
+- `/opt/fts/certs/ca.key` - CA private key
+- `/opt/fts/certs/FTS_CRL.json` - Certificate Revocation List
+
+### Generate Server Certificates
+
+```python
+with AtakOfTheCerts(pwd="your_secure_password") as cert_generator:
+    cert_generator.bake("server", cert="server")
+```
+
+This creates:
+- `/opt/fts/certs/server.pem` - Server certificate
+- `/opt/fts/certs/server.key` - Server private key
+- `/opt/fts/certs/server.key.unencrypted` - Unencrypted key for service
+- `/opt/fts/certs/server.p12` - PKCS12 bundle for clients
+
+### Generate Client Certificates
+
+For each client that will connect:
+
+```python
+with AtakOfTheCerts(pwd="your_secure_password") as cert_generator:
+    cert_generator.bake("client_username", cert="user")
+```
+
+### Configure FreeTAKServer
+
+Update your configuration to enable SSL:
+
+<CodeGroup>
+```yaml FTSConfig.yaml
+System:
+  FTS_CONNECTION_MESSAGE: "Welcome to FreeTAKServer"
+
+Addresses:
+  FTS_COT_PORT: 8087          # Non-SSL port
+  FTS_SSLCOT_PORT: 8089       # SSL port
+  FTS_API_PORT: 19023
+  FTS_USER_ADDRESS: 0.0.0.0   # Server IP for connections
+
+Certs:
+  FTS_SERVER_KEYDIR: /opt/fts/certs/server.key
+  FTS_SERVER_PEMDIR: /opt/fts/certs/server.pem
+  FTS_UNENCRYPTED_KEYDIR: /opt/fts/certs/server.key.unencrypted
+  FTS_SERVER_P12DIR: /opt/fts/certs/server.p12
+  FTS_CADIR: /opt/fts/certs/ca.pem
+  FTS_CAKEYDIR: /opt/fts/certs/ca.key
+  FTS_CLIENT_CERT_PASSWORD: your_secure_password
+  FTS_CRLDIR: /opt/fts/certs/FTS_CRL.json
+
+Filesystem:
+  FTS_CERTS_PATH: /opt/fts/certs
+  FTS_CLIENT_PACKAGES_PATH: /opt/fts/certs/clientPackages
+```
+
+```bash Environment Variables
+export FTS_SSLCOT_PORT=8089
+export FTS_USER_ADDRESS="your.server.ip"
+export FTS_CLIENT_CERT_PASSWORD="your_secure_password"
+export FTS_CERTS_PATH="/opt/fts/certs"
+export FTS_SERVER_KEYDIR="/opt/fts/certs/server.key"
+export FTS_SERVER_PEMDIR="/opt/fts/certs/server.pem"
+export FTS_CADIR="/opt/fts/certs/ca.pem"
+export FTS_CAKEYDIR="/opt/fts/certs/ca.key"
+```
+</CodeGroup>
+
+</Steps>
+
+## Advanced Certificate Management
+
+### Custom Certificate Parameters
+
+Generate certificates with custom expiry and parameters:
+
+```python
+from FreeTAKServer.core.util.certificate_generation import AtakOfTheCerts
+
+with AtakOfTheCerts(pwd="strong_password") as cert_gen:
+    # Generate CA with 5-year validity
+    cert_gen.generate_ca(expiry_time_secs=157680000)
+    
+    # Generate server cert with 2-year validity
+    cert_gen.bake(
+        common_name="server",
+        cert="server",
+        expiry_time_secs=63072000  # 2 years
+    )
+    
+    # Generate client cert with 1-year validity
+    cert_gen.bake(
+        common_name="field_user_1",
+        cert="user",
+        expiry_time_secs=31536000  # 1 year
+    )
+```
+
+### Certificate Properties
+
+Generated certificates include:
+
+```text
+Subject:
+  CN: Common Name (server/username)
+  ST: Nova Scotia
+  C: CA
+  O: FreeTAKServer
+  OU: Core Dev
+  L: Halifax
+
+Key Type: RSA 2048-bit
+Signature Algorithm: SHA-256
+Version: X.509 v3
+```
+
+### Automated Certificate Generation
+
+Generate all necessary certificates for a deployment:
+
+```python
+from FreeTAKServer.core.util.certificate_generation import AtakOfTheCerts
+
+with AtakOfTheCerts(pwd="cert_password") as cert_gen:
+    # Generate complete certificate infrastructure
+    cert_gen.generate_auto_certs(
+        ip="your.server.ip",
+        copy=True,  # Copy server certs to FTS location
+        expiry_time_secs=31536000,  # 1 year
+        wintak_zip=False  # Set True for WinTAK packages
+    )
+```
+
+This generates:
+- CA certificate
+- Server certificate
+- Default client certificate
+- Connection data package
+
+## Certificate Revocation
+
+Revoke compromised or expired client certificates:
+
+```python
+from FreeTAKServer.core.util.certificate_generation import revoke_certificate
+
+revoke_certificate(
+    username="compromised_user",
+    ca_pem="/opt/fts/certs/ca.pem",
+    ca_key="/opt/fts/certs/ca.key",
+    crl_file="/opt/fts/certs/FTS_CRL.json",
+    user_cert_dir="/opt/fts/certs"
+)
+```
+
+<Warning>
+After revoking certificates:
+
+1. The CRL is automatically updated
+2. Restart FreeTAKServer to load new CRL
+3. Revoked clients will be denied connection
+4. Generate new certificates for affected users
+</Warning>
+
+## SSL Service Configuration
+
+The SSL CoT Service is configured in MainConfig.py:
+
+```python
+# From FreeTAKServer/core/configuration/MainConfig.py
+
+# SSL CoT Service Port
+"SSLCoTServicePort": {"default": 8089, "type": int}
+
+# Certificate paths
+"keyDir": {"default": Path(rf"{PERSISTENCE_PATH}/certs/server.key")}
+"pemDir": {"default": Path(rf"{PERSISTENCE_PATH}/certs/server.pem")}
+"unencryptedKey": {"default": Path(rf"{PERSISTENCE_PATH}/certs/server.key.unencrypted")}
+"CA": {"default": Path(rf"{PERSISTENCE_PATH}/certs/ca.pem")}
+"CAkey": {"default": Path(rf"{PERSISTENCE_PATH}/certs/ca.key")}
+
+# Client certificate password
+"password": {"default": "supersecret", "type": str}
+```
+
+## Data Package Generation
+
+### Standard ATAK/ITAK Package
+
+```python
+from FreeTAKServer.core.util.certificate_generation import generate_standard_zip
+
+generate_standard_zip(
+    server_address="203.0.113.10",
+    server_filename="",  # Auto-generated from server config
+    user_filename="field_user_1.p12",
+    cert_password="client_cert_password",
+    ssl_port="8089"
+)
+```
+
+Package contents:
+```text
+username.zip
+├── manifest.xml
+├── fts.pref (ATAK preferences)
+├── server.p12 (Server certificate)
+└── field_user_1.p12 (Client certificate)
+```
+
+### WinTAK Package
+
+WinTAK requires nested data package structure:
+
+```python
+from FreeTAKServer.core.util.certificate_generation import generate_wintak_zip
+
+generate_wintak_zip(
+    server_address="203.0.113.10",
+    user_filename="wintak_user.p12",
+    cert_password="cert_password",
+    ssl_port="8089"
+)
+```
+
+Package structure:
+```text
+wintak_user.zip
+├── MANIFEST/manifest.xml (Outer manifest)
+└── 80b828699e074a239066d454a76284eb/
+    └── wintak_user.zip (Inner package)
+        ├── MANIFEST/manifest.xml
+        └── 5c2bfcae3d98c9f4d262172df99ebac5/
+            ├── fts.pref
+            ├── server.p12
+            └── wintak_user.p12
+```
+
+### Data Package Preferences
+
+The generated `.pref` file configures client connection:
+
+```xml
+<?xml version='1.0' encoding='ASCII' standalone='yes'?>
+<preferences>
+    <preference version="1" name="cot_streams">
+        <entry key="count" class="class java.lang.Integer">1</entry>
+        <entry key="description0" class="class java.lang.String">FreeTAKServer_203.0.113.10</entry>
+        <entry key="enabled0" class="class java.lang.Boolean">false</entry>
+        <entry key="connectString0" class="class java.lang.String">203.0.113.10:8089:ssl</entry>
+    </preference>
+    <preference version="1" name="com.atakmap.app_preferences">
+        <entry key="caLocation" class="class java.lang.String">/cert/server.p12</entry>
+        <entry key="caPassword" class="class java.lang.String">password</entry>
+        <entry key="certificateLocation" class="class java.lang.String">/cert/Client.p12</entry>
+        <entry key="clientPassword" class="class java.lang.String">password</entry>
+    </preference>
+</preferences>
+```
+
+## Docker SSL Configuration
+
+### Using Docker Volumes for Certificates
+
+```yaml
+# compose.yaml
+services:
+  freetakserver:
+    image: freetakserver:latest
+    volumes:
+      - fts-certs:/opt/fts/certs
+    environment:
+      FTS_SSLCOT_PORT: 8089
+      FTS_CLIENT_CERT_PASSWORD: "secure_password"
+    ports:
+      - "8089:8089"  # SSL CoT
+      - "8443:8443"  # HTTPS Data Packages
+
+volumes:
+  fts-certs:
+```
+
+### Generate Certificates in Docker
+
+```bash
+# Enter container
+docker exec -it freetakserver bash
+
+# Generate certificates
+python3 << 'EOF'
+from FreeTAKServer.core.util.certificate_generation import AtakOfTheCerts
+
+with AtakOfTheCerts(pwd="password") as cert:
+    cert.generate_ca()
+    cert.bake("server", "server")
+    cert.bake("Client", "user")
+EOF
+
+# Exit container
+exit
+
+# Copy client package from container
+docker cp freetakserver:/opt/fts/certs/clientPackages/Client.zip ./
+```
+
+## Troubleshooting
+
+### SSL Connection Failures
+
+<Note>
+**Common SSL errors and solutions:**
+
+**Error**: `SSL handshake failed`
+- **Cause**: Certificate mismatch or expired
+- **Solution**: Regenerate certificates, verify expiry dates
+
+**Error**: `Certificate verification failed`
+- **Cause**: Client doesn't trust CA
+- **Solution**: Ensure client data package includes CA certificate
+
+**Error**: `Wrong password`
+- **Cause**: Certificate password mismatch
+- **Solution**: Verify `FTS_CLIENT_CERT_PASSWORD` matches generation password
+</Note>
+
+### Verify Certificate Validity
+
+```bash
+# Check certificate expiry
+openssl x509 -in /opt/fts/certs/server.pem -noout -dates
+
+# Verify certificate chain
+openssl verify -CAfile /opt/fts/certs/ca.pem /opt/fts/certs/server.pem
+
+# Check PKCS12 bundle
+openssl pkcs12 -info -in /opt/fts/certs/Client.p12 -passin pass:password
+```
+
+### Certificate Permissions
+
+Ensure proper file permissions:
+
+```bash
+chmod 600 /opt/fts/certs/*.key
+chmod 644 /opt/fts/certs/*.pem
+chmod 644 /opt/fts/certs/*.p12
+chown -R freetak:freetak /opt/fts/certs/
+```
+
+### Debug SSL Service
+
+Enable detailed SSL logging:
+
+```bash
+export FTS_LOG_LEVEL="debug"
+python3 -m FreeTAKServer.controllers.services.FTS
+```
+
+Monitor SSL service logs:
+
+```bash
+tail -f /opt/fts/Logs/FTS.log | grep -i ssl
+```
+
+## Security Best Practices
+
+<Warning>
+**Production SSL recommendations:**
+
+1. **Strong Passwords**: Use complex passwords for certificate protection
+   ```python
+   import secrets
+   password = secrets.token_urlsafe(32)
+   ```
+
+2. **Certificate Expiry**: Set reasonable expiry times
+   - CA: 5-10 years
+   - Server: 2-3 years
+   - Client: 1 year
+
+3. **Key Protection**: Secure private keys
+   - Never commit to version control
+   - Use file permissions (600 for .key files)
+   - Store backups encrypted
+
+4. **Regular Rotation**: Implement certificate rotation schedule
+   - Revoke old certificates before expiry
+   - Generate and distribute new certificates
+   - Update CRL regularly
+
+5. **Backup Certificates**: Securely backup CA and server certificates
+   ```bash
+   tar czf fts-certs-backup-$(date +%Y%m%d).tar.gz /opt/fts/certs/
+   ```
+</Warning>
+
+## Next Steps
+
+- [Connect Clients](/guides/connecting-clients) with generated certificates
+- [Configure Federation](/guides/federation) for server-to-server SSL
+- [Set up Data Packages](/guides/data-packages) over HTTPS

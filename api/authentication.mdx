@@ -1,0 +1,406 @@
+---
+title: Authentication
+description: Authentication and authorization mechanisms for FreeTAKServer REST API and TAK API services
+---
+
+FreeTAKServer implements multiple authentication mechanisms depending on the API service being accessed. This page covers authentication requirements and implementation details for all API types.
+
+## Authentication Methods
+
+FreeTAKServer uses different authentication methods for different services:
+
+| Service | Authentication Method | Port |
+|---------|----------------------|------|
+| REST API | Bearer Token (Flask-HTTPAuth) | 19023 |
+| HTTPS TAK API | Mutual TLS (Client Certificates) | 8443 |
+| HTTP TAK API | Optional/None | 8080 |
+| SSL CoT Service | Client Certificates | 8089 |
+| TCP CoT Service | None | 8087 |
+
+## REST API Authentication
+
+The REST API service uses **Bearer Token authentication** implemented with Flask-HTTPAuth.
+
+### Implementation
+
+The authentication is implemented in `FreeTAKServer/services/rest_api_service/controllers/authentication.py`:
+
+```python
+from flask_httpauth import HTTPTokenAuth
+from flask import request
+import datetime as dt
+
+auth = HTTPTokenAuth(scheme='Bearer')
+
+@auth.verify_token
+def verify_token(token):
+    from .persistency import dbController
+    if token:
+        # Check API user table
+        output = dbController.query_APIUser(query=f'token = "{token}"')
+        if output:
+            return output[0].Username
+        else:
+            # Check system user table
+            output = dbController.query_systemUser(query=f'token = "{token}"')
+            if output:
+                output = output[0]
+                # Log API call for system users
+                dbController.create_APICall(
+                    user_id=output.uid, 
+                    timestamp=dt.datetime.now(), 
+                    content=request.data,
+                    endpoint=request.base_url
+                )
+                return output.name
+    return None
+```
+
+### Token Verification Process
+
+1. **Extract Token**: The `@auth.login_required` decorator extracts the Bearer token from the `Authorization` header
+2. **Query APIUser Table**: First checks if the token exists in the `APIUser` table
+3. **Query SystemUser Table**: If not found in APIUser, checks the `SystemUser` table
+4. **Log Request**: For system users, logs the API call with timestamp, content, and endpoint
+5. **Return Identity**: Returns the username if valid, `None` if invalid
+
+### Using Bearer Token Authentication
+
+#### Making Authenticated Requests
+
+Include the Bearer token in the `Authorization` header:
+
+```bash
+curl -X GET \
+  http://localhost:19023/ManageSystemUser/getAll \
+  -H 'Authorization: Bearer YOUR_TOKEN_HERE'
+```
+
+Using Python requests:
+
+```python
+import requests
+
+url = "http://localhost:19023/ManageSystemUser/getAll"
+headers = {
+    "Authorization": "Bearer YOUR_TOKEN_HERE"
+}
+
+response = requests.get(url, headers=headers)
+print(response.json())
+```
+
+Using JavaScript fetch:
+
+```javascript
+fetch('http://localhost:19023/ManageSystemUser/getAll', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN_HERE'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+### Protected Endpoints
+
+All REST API endpoints except `/Alive` require authentication. Endpoints are decorated with `@auth.login_required`:
+
+```python
+@app.route('/ManageSystemUser/getAll', methods=["GET"])
+@auth.login_required
+def getSystemUsersRest():
+    # Endpoint logic here
+    pass
+```
+
+<Warning>
+The `/Alive` health check endpoint does not require authentication and can be used to verify server availability without credentials.
+</Warning>
+
+## TAK API Authentication
+
+### HTTPS TAK API (Port 8443)
+
+The HTTPS TAK API service uses **mutual TLS authentication** requiring client certificates.
+
+#### Certificate Requirements
+
+- **Server Certificate**: Server must have a valid SSL certificate signed by the CA
+- **Client Certificate**: Each client must present a valid certificate signed by the same CA
+- **CA Certificate**: Both server and client must trust the Certificate Authority
+
+The service is configured to require client certificates:
+
+```python
+wsgi.server(
+    sock=wrap_ssl(
+        listen((IP, HTTPPORT)), 
+        keyfile=config.unencryptedKey,
+        certfile=config.pemDir,
+        server_side=True, 
+        ca_certs=config.CA, 
+        cert_reqs=ssl.CERT_REQUIRED  # Require client certificate
+    ), 
+    site=app
+)
+```
+
+#### Certificate Paths
+
+Default certificate locations (configurable via `MainConfig`):
+
+- **Server Key**: `/opt/fts/certs/server.key.unencrypted`
+- **Server Certificate**: `/opt/fts/certs/server.pem`
+- **CA Certificate**: `/opt/fts/certs/ca.pem`
+- **CA Key**: `/opt/fts/certs/ca.key`
+
+### HTTP TAK API (Port 8080)
+
+The HTTP TAK API service does **not require authentication** and is intended for development/testing only.
+
+<Warning>
+The HTTP TAK API on port 8080 should never be exposed in production environments. It does not enforce any authentication and all endpoints are publicly accessible.
+</Warning>
+
+## System User Management
+
+### Creating Users with Tokens
+
+System users can be created with authentication tokens through the REST API:
+
+```python
+# Example: Create system user with token
+url = "http://localhost:19023/ManageSystemUser/postSystemUser"
+headers = {
+    "Authorization": "Bearer ADMIN_TOKEN",
+    "Content-Type": "application/json"
+}
+payload = {
+    "systemUsers": [
+        {
+            "Name": "user1",
+            "Group": "team1",
+            "Token": "user1_secret_token",
+            "Password": "user1_password",
+            "DeviceType": "mobile",
+            "Certs": "false"
+        }
+    ]
+}
+
+response = requests.post(url, headers=headers, json=payload)
+```
+
+### Creating Users with Certificates
+
+When creating users with certificates enabled, FreeTAKServer automatically generates client certificates:
+
+```python
+payload = {
+    "systemUsers": [
+        {
+            "Name": "user1",
+            "Group": "team1",
+            "Token": "user1_secret_token",
+            "Password": "user1_password",
+            "DeviceType": "wintak",  # or "mobile"
+            "Certs": "true"  # Enable certificate generation
+        }
+    ]
+}
+```
+
+The server will:
+
+1. Generate a client certificate using `AtakOfTheCerts().bake(common_name=cert_name)`
+2. Create a certificate package (`.p12` file)
+3. Generate a platform-specific ZIP package (WinTAK or mobile ATAK)
+4. Store the package as a data package for download
+5. Optionally send a CoT message to the client with download information
+
+<Info>
+Certificate generation uses the `FreeTAKServer.core.util.certificate_generation` module and creates packages compatible with ATAK, WinTAK, and iTAK clients.
+</Info>
+
+## User Types
+
+FreeTAKServer supports two types of authenticated users:
+
+### API Users
+
+Stored in the `APIUser` database table, these users are specifically for API access.
+
+**Fields:**
+- `Username`: User identifier
+- `token`: Bearer token for authentication
+
+### System Users
+
+Stored in the `SystemUser` database table, these users represent TAK clients and can access both API and CoT services.
+
+**Fields:**
+- `name`: User/callsign
+- `group`: User group/team
+- `token`: Bearer token for API authentication
+- `password`: Password (may be used for alternative auth)
+- `uid`: Unique user identifier
+- `certificate_package_name`: Name of associated certificate package
+- `device_type`: Device type ("mobile", "wintak", etc.)
+
+## API Call Logging
+
+When system users authenticate to the REST API, all API calls are logged:
+
+```python
+dbController.create_APICall(
+    user_id=output.uid,           # System user UID
+    timestamp=dt.datetime.now(),  # Request timestamp
+    content=request.data,          # Request body
+    endpoint=request.base_url      # Endpoint URL
+)
+```
+
+This provides an audit trail of all API operations performed by system users.
+
+## WebSocket Authentication
+
+The REST API service provides WebSocket endpoints for real-time updates. WebSocket connections require separate authentication:
+
+```javascript
+// Connect to WebSocket
+const socket = io('http://localhost:19023');
+
+// Authenticate
+socket.emit('authenticate', JSON.stringify({
+    "Authenticate": "YourWebsocketKey"  // From MainConfig.websocketkey
+}));
+
+// Listen for authentication response
+socket.on('authentication', (data) => {
+    const response = JSON.parse(data);
+    if (response.successful === 'True') {
+        console.log('WebSocket authenticated');
+        // Now can use other events: users, logs, serviceInfo, etc.
+    }
+});
+```
+
+<Warning>
+WebSocket authentication uses a separate key configured in `MainConfig.websocketkey`, not user Bearer tokens. The default value is "YourWebsocketKey" and should be changed in production.
+</Warning>
+
+## Security Best Practices
+
+### Token Management
+
+1. **Generate Strong Tokens**: Use cryptographically secure random tokens
+   ```python
+   import secrets
+   token = secrets.token_urlsafe(32)
+   ```
+
+2. **Store Securely**: Never commit tokens to version control
+
+3. **Rotate Regularly**: Update tokens periodically using the update endpoint
+   ```bash
+   curl -X PUT http://localhost:19023/ManageSystemUser/putSystemUser \
+     -H 'Authorization: Bearer ADMIN_TOKEN' \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "systemUsers": [{
+         "uid": "user-uid-here",
+         "Token": "new-token-value"
+       }]
+     }'
+   ```
+
+4. **Use HTTPS**: Always use HTTPS in production to prevent token interception
+
+### Certificate Management
+
+1. **Protect CA Key**: The CA private key should be stored securely with restricted permissions
+
+2. **Certificate Expiration**: Monitor and renew certificates before expiration
+
+3. **Revocation**: Use the Certificate Revocation List (CRL) to revoke compromised certificates
+   ```python
+   from FreeTAKServer.core.util.certificate_generation import revoke_certificate
+   revoke_certificate(username=username)
+   ```
+
+4. **Client Certificate Distribution**: Use secure channels to distribute client certificates
+
+### Configuration Security
+
+1. **Change Default Keys**: Update `SecretKey` and `websocketkey` in `MainConfig`
+
+2. **Environment Variables**: Use environment variables for sensitive configuration:
+   ```bash
+   export FTS_SECRET_KEY="your-secret-key"
+   export FTS_NODE_ID="your-node-id"
+   ```
+
+3. **Restrict API Access**: Use firewall rules to limit REST API access to authorized networks
+
+4. **Disable HTTP TAK API**: In production, disable or firewall the HTTP TAK API service (port 8080)
+
+## Troubleshooting Authentication
+
+### 401 Unauthorized Errors
+
+**Symptom**: REST API returns 401 Unauthorized
+
+**Possible Causes**:
+1. Missing or invalid Bearer token
+2. Token not in database
+3. Incorrect header format (should be `Authorization: Bearer TOKEN`)
+
+**Solution**:
+```bash
+# Verify token format
+curl -v -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:19023/ManageSystemUser/getAll
+
+# Check if token exists in database
+# Query SystemUser or APIUser tables
+```
+
+### Certificate Authentication Failures
+
+**Symptom**: HTTPS TAK API refuses connection or returns SSL errors
+
+**Possible Causes**:
+1. Client certificate not signed by trusted CA
+2. Certificate expired
+3. Certificate revoked
+4. Incorrect certificate format
+
+**Solution**:
+```bash
+# Verify certificate with OpenSSL
+openssl verify -CAfile /opt/fts/certs/ca.pem client.pem
+
+# Check certificate expiration
+openssl x509 -in client.pem -noout -dates
+
+# Test connection
+curl --cert client.pem --key client.key --cacert ca.pem \
+  https://localhost:8443/Marti/api/version
+```
+
+### WebSocket Authentication Fails
+
+**Symptom**: WebSocket events return no data or connection rejected
+
+**Solution**:
+1. Verify `websocketkey` in MainConfig matches authentication key
+2. Ensure authentication event is sent before other events
+3. Check that session.authenticated is set to True
+
+## Next Steps
+
+- [REST API Reference](/api/rest/missions) - Explore available REST API endpoints
+- [Security Configuration](/configuration/security) - Learn about managing users and certificates
+- [Configuration](/configuration/main-config) - Configure authentication settings

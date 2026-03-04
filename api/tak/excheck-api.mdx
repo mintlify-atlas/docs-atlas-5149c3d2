@@ -1,0 +1,330 @@
+---
+title: 'ExCheck API'
+description: 'TAK Server ExCheck API endpoints for checklist templates and active checklists'
+---
+
+## Overview
+
+The ExCheck (Extended Checklist) API provides TAK-compatible endpoints for creating and managing checklist templates and active checklists. ExCheck allows teams to create, share, and track completion of task checklists in TAK environments.
+
+## Template Management
+
+### Create Template
+
+<RequestExample>
+```bash
+POST /Marti/api/excheck/template
+```
+</RequestExample>
+
+<ParamField query="creatorUid" type="string">
+  UID of the template creator (falls back to clientUid if not provided)
+</ParamField>
+
+<ParamField query="clientUid" type="string">
+  Alternative parameter for creator UID
+</ParamField>
+
+<ParamField body="templatedata" type="xml" required>
+  XML template data in TAK ExCheck format
+</ParamField>
+
+Creates a new checklist template. Templates define the structure and tasks for checklists.
+
+<ResponseExample>
+```text
+done
+```
+</ResponseExample>
+
+### Get Template
+
+<RequestExample>
+```bash
+GET /Marti/api/excheck/template/{templateUid}
+```
+</RequestExample>
+
+<ParamField path="templateUid" type="string" required>
+  Unique identifier of the template
+</ParamField>
+
+<ResponseField name="template_data" type="xml">
+  Template definition in XML format
+</ResponseField>
+
+### Manage Template Tasks
+
+<RequestExample>
+```bash
+GET /Marti/api/excheck/template/{templateUid}/task/{taskUid}
+POST /Marti/api/excheck/template/{templateUid}/task/{taskUid}
+PUT /Marti/api/excheck/template/{templateUid}/task/{taskUid}
+DELETE /Marti/api/excheck/template/{templateUid}/task/{taskUid}
+```
+</RequestExample>
+
+<ParamField path="templateUid" type="string" required>
+  Template identifier
+</ParamField>
+
+<ParamField path="taskUid" type="string" required>
+  Task identifier
+</ParamField>
+
+<ParamField body="taskdata" type="xml">
+  Task data for POST/PUT operations
+</ParamField>
+
+- **GET**: Retrieve a specific template task
+- **POST**: Create a new template task
+- **PUT**: Update an existing template task  
+- **DELETE**: Delete a template task
+
+## Active Checklists
+
+### Start Checklist from Template
+
+<RequestExample>
+```bash
+POST /Marti/api/excheck/{subscription}/start
+```
+</RequestExample>
+
+<ParamField path="subscription" type="string" required>
+  Template UID to instantiate as a checklist
+</ParamField>
+
+<ParamField query="name" type="string" required>
+  Name for the new checklist instance
+</ParamField>
+
+<ParamField query="description" type="string">
+  Description for the checklist
+</ParamField>
+
+Creates an active checklist from a template. The checklist can then be updated as tasks are completed.
+
+<ResponseField name="checklist" type="xml">
+  Created checklist data
+</ResponseField>
+
+### Get All Active Checklists
+
+<RequestExample>
+```bash
+GET /Marti/api/excheck/checklist/active
+```
+</RequestExample>
+
+Returns all currently active checklists.
+
+<ResponseField name="checklists" type="xml">
+  XML document containing all active checklists
+</ResponseField>
+
+<ResponseExample>
+```xml
+<?xml version="1.0"?>
+<checklists>
+  <checklist uid="..." name="...">
+    <!-- checklist content -->
+  </checklist>
+</checklists>
+```
+</ResponseExample>
+
+<Note>
+Response Content-Type is set to `application/xml`
+</Note>
+
+### Get Specific Checklist
+
+<RequestExample>
+```bash
+GET /Marti/api/excheck/checklist/{checklistid}
+```
+</RequestExample>
+
+<ParamField path="checklistid" type="string" required>
+  Unique identifier of the checklist
+</ParamField>
+
+<ResponseField name="checklist_data" type="xml">
+  Complete checklist data including all tasks and their status
+</ResponseField>
+
+## Checklist Task Management
+
+### Update Checklist Task
+
+<RequestExample>
+```bash
+PUT /Marti/api/excheck/checklist/{checklistid}/task/{taskid}
+```
+</RequestExample>
+
+<ParamField path="checklistid" type="string" required>
+  Checklist identifier
+</ParamField>
+
+<ParamField path="taskid" type="string" required>
+  Task identifier to update
+</ParamField>
+
+<ParamField body="checklisttaskdata" type="xml" required>
+  Updated task data (typically includes completion status)
+</ParamField>
+
+Updates a task within an active checklist. Triggers `ChecklistUpdateNotification` to both TCP and SSL CoT services to notify connected clients.
+
+<Note>
+Notifications are sent to both `tcp_cot_service` and `ssl_cot_service` asynchronously
+</Note>
+
+### Get Checklist Task
+
+<RequestExample>
+```bash
+GET /Marti/api/excheck/checklist/{checklistid}/task/{taskid}
+```
+</RequestExample>
+
+<ParamField path="checklistid" type="string" required>
+  Checklist identifier
+</ParamField>
+
+<ParamField path="taskid" type="string" required>
+  Task identifier
+</ParamField>
+
+<ResponseField name="checklist_task_data" type="xml">
+  Individual task data and status
+</ResponseField>
+
+## Mission Integration
+
+### Add Checklist to Mission
+
+<RequestExample>
+```bash
+PUT /Marti/api/excheck/checklist/{checklist_id}/mission/{mission_id}
+```
+</RequestExample>
+
+<ParamField path="checklist_id" type="string" required>
+  Checklist identifier
+</ParamField>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField query="clientUid" type="string">
+  Client UID performing the operation
+</ParamField>
+
+Links a checklist to a mission as external data. Triggers `MissionExternalDataCreatedNotification` asynchronously.
+
+<Note>
+This integrates ExCheck with the Mission API, allowing checklists to be part of mission planning and execution
+</Note>
+
+## Workflow Example
+
+### Creating and Using a Checklist
+
+```bash
+# 1. Create a template
+curl -X POST "http://server:8080/Marti/api/excheck/template?creatorUid=user-123" \
+  -H "Content-Type: application/xml" \
+  -d '<template>...</template>'
+
+# 2. Start a checklist from the template
+curl -X POST "http://server:8080/Marti/api/excheck/{template-uid}/start?name=Pre-Flight&description=Aircraft+checklist" \
+  -H "Content-Type: application/json"
+
+# 3. Get all active checklists
+curl "http://server:8080/Marti/api/excheck/checklist/active"
+
+# 4. Update task status
+curl -X PUT "http://server:8080/Marti/api/excheck/checklist/{checklist-uid}/task/{task-uid}" \
+  -H "Content-Type: application/xml" \
+  -d '<task status="complete">...</task>'
+
+# 5. Add checklist to a mission
+curl -X PUT "http://server:8080/Marti/api/excheck/checklist/{checklist-uid}/mission/op-alpha?clientUid=user-123"
+```
+
+## Data Format
+
+ExCheck uses XML format for templates and checklists, following the TAK ExCheck specification:
+
+### Template Structure
+```xml
+<?xml version="1.0"?>
+<checklistTemplate uid="template-uid" name="Template Name">
+  <checklistDetails>
+    <description>Template description</description>
+    <creatorUid>user-123</creatorUid>
+  </checklistDetails>
+  <checklistTasks>
+    <checklistTask uid="task-1">
+      <description>Task description</description>
+      <!-- task details -->
+    </checklistTask>
+  </checklistTasks>
+</checklistTemplate>
+```
+
+### Checklist Instance
+```xml
+<?xml version="1.0"?>
+<checklist uid="checklist-uid" name="Checklist Name" templateUid="template-uid">
+  <checklistDetails>
+    <description>Checklist description</description>
+    <startTime>2026-03-04T12:00:00Z</startTime>
+  </checklistDetails>
+  <checklistTasks>
+    <checklistTask uid="task-1" status="pending|complete">
+      <description>Task description</description>
+      <completionTime>2026-03-04T12:15:00Z</completionTime>
+    </checklistTask>
+  </checklistTasks>
+</checklist>
+```
+
+## Notifications
+
+The ExCheck API triggers real-time notifications:
+
+- **ChecklistUpdateNotification**: Sent when a task is updated (sent to TCP and SSL CoT services)
+- **MissionExternalDataCreatedNotification**: Sent when a checklist is added to a mission
+
+These notifications ensure all connected TAK clients receive updates immediately.
+
+## HTTP vs HTTPS Differences
+
+Both HTTP and HTTPS services implement identical ExCheck endpoints:
+
+- **Controller**: HTTP uses `HTTPTakApiCommunicationController`, HTTPS uses `HTTPSTakApiCommunicationController`
+- **Endpoints**: All routes and functionality are the same
+- **Notifications**: Both trigger the same notification types
+
+## Use Cases
+
+- **Mission Planning**: Pre-mission checklists for equipment, personnel, and procedures
+- **Operational Checklists**: In-mission task tracking and coordination
+- **Training**: Standardized training checklists across teams
+- **Quality Assurance**: Post-mission review checklists
+- **Maintenance**: Equipment maintenance and inspection checklists
+
+## Error Responses
+
+- **200 OK**: Successful operation
+- **500 Internal Server Error**: Processing error (exceptions are logged)
+
+## Source Code References
+
+- HTTP Blueprint: `FreeTAKServer/services/http_tak_api_service/blueprints/excheck_blueprint.py:1-97`
+- HTTPS Blueprint: `FreeTAKServer/services/https_tak_api_service/blueprints/excheck_blueprint.py:1-97`

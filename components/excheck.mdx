@@ -1,0 +1,437 @@
+---
+title: ExCheck
+description: Component for checklist management and task tracking
+---
+
+## Overview
+
+The ExCheck (Exercise Check) component provides comprehensive checklist management functionality for FreeTAKServer. It enables users to create templates, start checklists, track task completion, and collaborate on structured workflows. ExCheck is fully compatible with ATAK and WinTAK checklist features.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/components/extended/excheck/
+├── excheck_facade.py              # Public interface
+├── controllers/
+│   ├── excheck_checklist_controller.py
+│   ├── excheck_template_controller.py
+│   ├── excheck_notification_controller.py
+│   ├── excheck_persistency_controller.py
+│   ├── excheck_domain_controller.py
+│   ├── excheck_mission_controller.py
+│   ├── excheck_xml_controller.py
+│   └── excheck_wintak_adapter.py
+├── persistence/
+├── domain/
+└── configuration/
+```
+
+### Key Classes
+
+#### Excheck Facade
+
+**Location:** `FreeTAKServer/components/extended/excheck/excheck_facade.py:17`
+
+```python
+class Excheck(DefaultFacade):
+    def __init__(self, sync_action_mapper, request, response, 
+                 configuration, tracing_provider_instance=None):
+        self.template_controller = ExCheckTemplateController(...)
+        self.checklist_controller = ExCheckChecklistController(...)
+        self.notification_controller = ExCheckNotificationController(...)
+```
+
+**Public Methods:**
+- `create_template()` - Create new checklist template
+- `get_all_templates()` - List all templates
+- `get_template()` - Get specific template
+- `start_checklist()` - Start checklist from template
+- `update_checklist_task()` - Update task status
+- `get_checklist()` - Get checklist data
+- `get_checklists()` - List all checklists
+- `get_checklist_task()` - Get specific task
+- `add_checklist_to_mission()` - Link checklist to mission
+
+#### ExCheckChecklistController
+
+**Location:** `FreeTAKServer/components/extended/excheck/controllers/excheck_checklist_controller.py:43`
+
+Manages active checklists and task operations.
+
+```python
+class ExCheckChecklistController(Controller):
+    def __init__(self, request, response, sync_action_mapper, configuration):
+        self.persistency_controller = ExCheckPersistencyController(...)
+        self.template_controller = ExCheckTemplateController(...)
+        self.wintak_adapter = ExCheckWintakAdapter(...)
+        self.mission_controller = ExCheckMissionController(...)
+        self.domain_controller = ExcheckDomainController(...)
+```
+
+## Core Functionality
+
+### Template Management
+
+#### Creating Templates
+
+**Method:** `create_template()`
+
+Templates define the structure of checklists:
+
+```python
+# Create a new template
+excheck.create_template(
+    template_name="Pre-flight Checklist",
+    template_description="Standard pre-flight procedures",
+    template_data=template_xml,
+    config_loader=config
+)
+```
+
+**Template Structure (XML):**
+
+```xml
+<checklistDetails>
+    <uid>template-uuid</uid>
+    <name>Pre-flight Checklist</name>
+    <description>Standard procedures</description>
+</checklistDetails>
+<checklistTasks>
+    <checklistTask>
+        <uid>task-1</uid>
+        <name>Check fuel levels</name>
+        <description>Verify fuel is sufficient</description>
+    </checklistTask>
+    <checklistTask>
+        <uid>task-2</uid>
+        <name>Inspect controls</name>
+        <description>Test all flight controls</description>
+    </checklistTask>
+</checklistTasks>
+```
+
+#### Retrieving Templates
+
+```python
+# Get all templates
+templates = excheck.get_all_templates(config_loader=config)
+
+# Get specific template
+template = excheck.get_template(
+    templateuid="template-uuid",
+    config_loader=config
+)
+```
+
+### Checklist Operations
+
+#### Starting a Checklist
+
+**Method:** `start_checklist()`  
+**Location:** `excheck_checklist_controller.py:67`
+
+```python
+def start_checklist(
+    self,
+    templateuid: str,           # Template to use
+    checklistname: str,         # Name for this instance
+    checklist_description: str, # Description
+    config_loader,
+    checklist_content: bytes = b"",
+    *args, **kwargs
+):
+    # Generate unique checklist UUID
+    checklist_uuid = str(uuid.uuid4())
+    
+    # Get template data
+    template = self.template_controller.get_template(templateuid, config_loader)
+    parsed_checklist = etree.fromstring(template)
+    
+    # Set checklist details
+    parsed_checklist.find("checklistDetails").find("uid").text = checklist_uuid
+    parsed_checklist.find("checklistDetails").find("name").text = checklistname
+    parsed_checklist.find("checklistDetails").find("startTime").text = start_time
+    
+    # Save to Enterprise Sync
+    self.execute_sub_action("SaveEnterpriseSyncData")
+    
+    # Create associated mission
+    self.execute_sub_action("PutMission")
+```
+
+**Usage Example:**
+
+```python
+# Start a checklist from template
+excheck.start_checklist(
+    templateuid="preflight-template-001",
+    checklistname="Flight #142 Pre-flight",
+    checklist_description="Pre-flight for mission alpha",
+    config_loader=config
+)
+```
+
+#### Updating Tasks
+
+**Method:** `update_checklist_task()`  
+**Location:** `excheck_checklist_controller.py:190`
+
+```python
+# Update task status
+excheck.update_checklist_task(
+    checklistuid="checklist-uuid",
+    checklisttaskuid="task-uuid",
+    checklisttaskdata=updated_task_xml,
+    client_uid="user-123"
+)
+```
+
+**Task Update Process:**
+
+1. Standardize task format (WinTAK compatibility)
+2. Update task in Enterprise Sync
+3. Update parent checklist XML
+4. Trigger notification to subscribers
+
+#### Retrieving Checklists
+
+```python
+# Get all checklists
+all_checklists = excheck.get_checklists(
+    config_loader=config,
+    logger=logger
+)
+
+# Get specific checklist
+checklist = excheck.get_checklist(
+    checklistuid="checklist-uuid",
+    config_loader=config
+)
+
+# Get specific task
+task = excheck.get_checklist_task(
+    checklistuid="checklist-uuid",
+    checklisttaskuid="task-uuid"
+)
+```
+
+### Mission Integration
+
+#### Adding Checklist to Mission
+
+**Method:** `add_checklist_to_mission()`  
+**Location:** `excheck_checklist_controller.py:376`
+
+```python
+# Link checklist to mission
+excheck.add_checklist_to_mission(
+    checklist_id="checklist-uuid",
+    mission_id="operation-alpha",
+    client_uid="user-123"
+)
+```
+
+This creates external data link in the mission:
+
+```python
+{
+    "name": "Flight Pre-flight",
+    "uid": "checklist-uuid",
+    "tool": "ExCheck",
+    "notes": "user-123 added Flight Pre-flight",
+    "urlData": "https://server:8443/Marti/api/excheck/checklist/{uid}",
+    "urlView": "https://server:8443/Marti/api/excheck/checklist/{uid}/status"
+}
+```
+
+#### Getting Checklist Mission Info
+
+**Method:** `get_checklist_mission()`  
+**Location:** `excheck_checklist_controller.py:358`
+
+```python
+# Get mission info for checklist
+mission_info = excheck.get_checklist_mission(
+    checklist_id="checklist-uuid",
+    config_loader=config
+)
+```
+
+### Notifications
+
+**Controller:** `ExCheckNotificationController`
+
+```python
+# Send task update notification
+excheck.checklist_update_notification(
+    checklist_uid="checklist-uuid",
+    task_uid="task-uuid",
+    client_uid="user-123"
+)
+```
+
+Notifications are sent as CoT messages to checklist subscribers.
+
+## Data Storage
+
+### Enterprise Sync Integration
+
+ExCheck uses Enterprise Sync for persistent storage:
+
+**Templates:**
+```python
+synctype="ExCheckTemplate"
+mime_type="application/xml"
+tool="ExCheck"
+keywords=["Template"]
+```
+
+**Checklists:**
+```python
+synctype="ExCheckChecklist"
+mime_type="application/xml"
+tool="ExCheck"
+```
+
+**Tasks:**
+```python
+synctype="ExCheckChecklistTask"
+mime_type="application/xml"
+tool="ExCheck"
+keywords=["Task"]
+```
+
+### Database Models
+
+The persistence layer tracks:
+- Checklist metadata
+- Task associations
+- Mission-checklist mappings
+
+## Cross-Platform Compatibility
+
+### WinTAK Adapter
+
+**Controller:** `ExCheckWintakAdapter`  
+**Method:** `standardize_task()`
+
+Ensures compatibility between ATAK and WinTAK task formats:
+
+```python
+# Standardize task format
+standardized_task = self.wintak_adapter.standardize_task(
+    task_xml_bytes
+)
+```
+
+Handles differences in:
+- XML structure
+- Field naming
+- Data formats
+
+## Complete Workflow Example
+
+```python
+# 1. Create a template
+excheck.create_template(
+    template_name="Building Clear Template",
+    template_description="Standard building clearance procedure",
+    template_data=template_xml,
+    config_loader=config
+)
+
+# 2. Start a checklist from template
+excheck.start_checklist(
+    templateuid="building-clear-template",
+    checklistname="Building 7 Clearance",
+    checklist_description="Clearing building 7",
+    config_loader=config
+)
+
+# 3. Add to mission
+excheck.add_checklist_to_mission(
+    checklist_id=checklist_uuid,
+    mission_id="urban-ops-mission",
+    client_uid="team-leader-001"
+)
+
+# 4. Update task as completed
+excheck.update_checklist_task(
+    checklistuid=checklist_uuid,
+    checklisttaskuid=task_uuid,
+    checklisttaskdata=updated_task_xml,
+    client_uid="operator-002"
+)
+
+# 5. Send notification
+excheck.checklist_update_notification(
+    checklist_uid=checklist_uuid,
+    task_uid=task_uuid,
+    client_uid="operator-002"
+)
+
+# 6. Get status
+checklist_status = excheck.get_checklist(
+    checklistuid=checklist_uuid,
+    config_loader=config
+)
+```
+
+## Initialization
+
+On component registration, ExCheck automatically:
+
+**Method:** `register()`  
+**Location:** `excheck_facade.py:88`
+
+```python
+def register(self, *args, **kwargs):
+    super().register(*args, **kwargs)
+    # Create default template mission
+    self.template_controller.create_template_mission()
+```
+
+## Best Practices
+
+1. **Template Reuse**: Create reusable templates for common procedures
+2. **Meaningful Names**: Use descriptive names for checklists and tasks
+3. **Mission Linking**: Always link checklists to missions for context
+4. **Task Granularity**: Break down procedures into discrete, checkable tasks
+5. **Notifications**: Use notifications to keep team members synchronized
+6. **Status Tracking**: Regularly retrieve checklist status for monitoring
+
+## XML Structure Reference
+
+### Checklist XML
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<checklist>
+    <checklistDetails>
+        <uid>checklist-uuid</uid>
+        <name>Checklist Name</name>
+        <description>Description</description>
+        <startTime>2024-03-04T12:00:00.000Z</startTime>
+    </checklistDetails>
+    <checklistColumns>
+        <!-- Column definitions -->
+    </checklistColumns>
+    <checklistTasks>
+        <checklistTask>
+            <uid>task-uuid</uid>
+            <name>Task Name</name>
+            <description>Task Description</description>
+            <number>0</number>
+            <!-- Task status fields -->
+        </checklistTask>
+    </checklistTasks>
+</checklist>
+```
+
+## Related Components
+
+- [Mission](/components/mission) - Mission management and linking
+- [Enterprise Sync](/components/enterprise-sync) - Data storage backend
+- [Emergency](/components/emergency) - Can integrate with emergency procedures

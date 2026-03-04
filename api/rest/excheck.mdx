@@ -1,0 +1,138 @@
+---
+title: "ExCheck API"
+description: "Equipment check and checklist management endpoints"
+---
+
+The ExCheck API provides endpoints for managing equipment check templates and checklists. ExCheck allows teams to create, distribute, and track completion of standardized checklists.
+
+## Get ExCheck Table
+
+Retrieve all ExCheck templates and checklists stored in the special `exchecktemplates` mission.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/ExCheckTable" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Response
+
+Returns the mission object containing ExCheck templates and checklists.
+
+<ResponseField name="mission" type="object">
+  Mission object containing ExCheck data
+  
+  <Expandable title="mission properties">
+    <ResponseField name="name" type="string">
+      Mission name (always `exchecktemplates`)
+    </ResponseField>
+    
+    <ResponseField name="contents" type="array">
+      Array of ExCheck templates and checklists
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "name": "exchecktemplates",
+  "contents": [
+    {
+      "uid": "template-uid-123",
+      "name": "Pre-Mission Checklist",
+      "description": "Standard equipment check",
+      "items": [
+        {
+          "id": 1,
+          "description": "Radio check",
+          "required": true
+        },
+        {
+          "id": 2,
+          "description": "GPS device",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Empty Response
+
+If no ExCheck templates exist:
+
+```json
+{}
+```
+
+## ExCheck Storage
+
+ExCheck templates and checklists are stored as mission content in a special mission named `exchecktemplates`. This integration with the mission system allows:
+
+- Templates to be shared across the organization
+- Version control of checklist templates
+- Distribution to team members
+- Synchronization across clients
+
+## ExCheck Workflow
+
+1. **Create Template**: Templates are created and stored in the `exchecktemplates` mission
+2. **Distribute**: Templates are synchronized to clients via mission subscription
+3. **Execute**: Clients create checklist instances from templates
+4. **Track**: Completed checklists are submitted back to the server
+5. **Review**: Commanders can review checklist completion status
+
+## ExCheck Template Structure
+
+ExCheck templates typically include:
+
+- **Template UID**: Unique identifier for the template
+- **Name**: Display name of the checklist
+- **Description**: Purpose and context
+- **Items**: Array of checklist items with:
+  - Item ID
+  - Description
+  - Required flag
+  - Category/grouping
+
+## Integration with Missions
+
+ExCheck leverages the mission API infrastructure:
+
+- Templates stored as mission content
+- Uses enterprise sync for distribution
+- Follows mission security and permissions
+- Benefits from mission subscription model
+
+For more information on missions, see the [Mission API](/api/rest/missions).
+
+## Creating ExCheck Templates
+
+To create new ExCheck templates, use the Mission API to add content to the `exchecktemplates` mission. The content should follow the ExCheck XML schema defined in the TAK protocol.
+
+## Client Support
+
+ExCheck is supported by:
+
+- **ATAK** (Android Team Awareness Kit) - Native support for ExCheck templates
+- **WinTAK** - Full ExCheck functionality
+- **iTAK** - ExCheck viewing and completion
+- **WebTAK** - Basic ExCheck support
+
+## Error Responses
+
+The ExCheck endpoint returns an empty JSON object `{}` if:
+
+- The `exchecktemplates` mission doesn't exist
+- The mission exists but contains no content
+- An error occurs during retrieval
+
+For detailed error logging, check the server logs.

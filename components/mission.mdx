@@ -1,0 +1,370 @@
+---
+title: Mission
+description: Component for mission planning, management, and collaboration
+---
+
+## Overview
+
+The Mission component provides comprehensive mission planning and management capabilities for FreeTAKServer. It enables users to create missions, manage mission content, track changes, handle subscriptions, and collaborate with team members through a TAK-compatible mission management system.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/components/extended/mission/
+├── mission_facade.py              # Main facade
+├── controllers/
+│   ├── mission_general_controller.py
+│   ├── mission_persistence_controller.py
+│   ├── mission_subscription_controller.py
+│   ├── mission_logs_controller.py
+│   ├── mission_hierarchy_controller.py
+│   ├── mission_external_data_controller.py
+│   ├── mission_change_controller.py
+│   ├── mission_notification_controller.py
+│   ├── mission_cot_controller.py
+│   └── mission_invitation_controller.py
+├── persistence/
+│   ├── mission.py
+│   ├── mission_content.py
+│   ├── mission_change.py
+│   ├── mission_log.py
+│   ├── subscription.py
+│   └── external_data.py
+├── domain/
+└── configuration/
+```
+
+### Key Classes
+
+#### Mission Facade
+
+**Location:** `FreeTAKServer/components/extended/mission/mission_facade.py:24`
+
+```python
+class Mission(DefaultFacade):
+    def __init__(self, sync_action_mapper, request, response, 
+                 configuration, action_mapper=None, 
+                 tracing_provider_instance=None):
+        self.general_controller = MissionGeneralController(...)
+        self.persistence_controller = MissionPersistenceController(...)
+        self.subscription_controller = MissionSubscriptionController(...)
+        self.logs_controller = MissionLogsController(...)
+        self.hierarchy_controller = MissionHierarchyController(...)
+        self.external_data_controller = MissionExternalDataController(...)
+        self.change_controller = MissionChangeController(...)
+        self.notification_controller = MissionNotificationController(...)
+        self.cot_controller = MissionCOTController(...)
+        self.invitations_controller = MissionInvitationController(...)
+```
+
+#### MissionGeneralController
+
+**Location:** `FreeTAKServer/components/extended/mission/controllers/mission_general_controller.py:41`
+
+Handles core mission operations including creation, retrieval, and content management.
+
+```python
+class MissionGeneralController(Controller):
+    def put_mission(self, mission_id, mission_data, mission_data_args, 
+                    creatorUid, config_loader, *args, **kwargs):
+        """Create a new mission and save to database"""
+        # Create mission database object
+        mission_db_obj = self.persistency_controller.create_mission(
+            str(mission_id),
+            tool=str(initial_mission_data.get('tool', 'public')),
+            name=str(mission_id),
+            description=str(initial_mission_data.get('description')),
+            defaultRole=default_mission_role,
+            clientUid=creatorUid
+        )
+```
+
+## Core Functionality
+
+### Mission Management
+
+#### Creating Missions
+
+**Method:** `put_mission()`  
+**Location:** `mission_general_controller.py:72`
+
+```python
+# Create a new mission
+request.set_value("mission_id", "operation-alpha")
+request.set_value("mission_data_args", {
+    'defaultRole': 'MISSION_OWNER',
+    'tool': 'public',
+    'description': 'Operation Alpha mission',
+    'passwordProtected': False,
+    'classification': 'UNCLASSIFIED'
+})
+request.set_value("creatorUid", "user-123")
+mission.put_mission()
+```
+
+#### Retrieving Missions
+
+**Methods:**
+- `get_missions()` - Get all public missions (location: `mission_general_controller.py:191`)
+- `get_mission(mission_id)` - Get specific mission (location: `mission_general_controller.py:206`)
+
+```python
+# Get all missions
+mission.get_missions(config_loader=config_loader)
+
+# Get specific mission
+mission.get_mission(mission_id="operation-alpha", config_loader=config_loader)
+```
+
+### Mission Content
+
+#### Adding Content
+
+**Method:** `add_contents_to_mission()`  
+**Location:** `mission_general_controller.py:215`
+
+Supports adding:
+- CoT messages
+- Data packages
+- External data links
+- Files and documents
+
+```python
+# Add content to mission
+mission.add_mission_contents(
+    mission_id="operation-alpha",
+    hashes=["sha256hash1", "sha256hash2"],
+    uids=["content-uid-1"],
+    config_loader=config_loader,
+    action_mapper=action_mapper
+)
+```
+
+### Mission Subscriptions
+
+**Controller:** `MissionSubscriptionController`
+
+```python
+# Subscribe to mission
+mission.add_mission_subscription(
+    mission_id="operation-alpha",
+    client_uid="user-123",
+    role="MISSION_SUBSCRIBER"
+)
+
+# Get mission subscriptions
+subscriptions = mission.get_mission_subscriptions(
+    mission_id="operation-alpha"
+)
+```
+
+### Mission Logs
+
+**Controller:** `MissionLogsController`  
+**Methods:** (locations in `mission_facade.py:129-149`)
+
+```python
+# Add log entry
+mission.add_mission_log(
+    mission_id="operation-alpha",
+    content="Mission started",
+    creator_uid="user-123"
+)
+
+# Retrieve logs
+logs = mission.get_mission_logs(mission_id="operation-alpha")
+```
+
+### Mission Hierarchy
+
+**Controller:** `MissionHierarchyController`
+
+Manages parent-child mission relationships:
+
+```python
+# Add child mission to parent
+mission.add_child_to_parent(
+    parent_mission_id="operation-alpha",
+    child_mission_id="task-bravo"
+)
+
+# Get children
+children = mission.get_children(mission_id="operation-alpha")
+```
+
+### Change Tracking
+
+**Controller:** `MissionChangeController`
+
+Tracks all mission modifications:
+
+```python
+# Get mission changes
+changes = mission.get_mission_changes(mission_id="operation-alpha")
+```
+
+**Change types tracked:**
+- Mission creation
+- Content uploads
+- Content deletions
+- Subscription changes
+- External data additions
+
+### Mission CoT Integration
+
+**Controller:** `MissionCOTController`
+
+```python
+# Create mission CoT
+mission.create_mission_cot(
+    mission_id="operation-alpha",
+    cot_data=cot_event
+)
+
+# Create mission geofence
+mission.create_mission_geofence(
+    mission_id="operation-alpha",
+    geofence_data=geofence_polygon
+)
+
+# Get mission CoTs
+cots = mission.get_mission_cots(mission_id="operation-alpha")
+```
+
+### Mission Invitations
+
+**Controller:** `MissionInvitationController`
+
+```python
+# Send mission invitation
+mission.send_invitation(
+    mission_id="operation-alpha",
+    invitee_uid="user-456",
+    role="MISSION_SUBSCRIBER"
+)
+
+# Get invitations
+invitations = mission.get_invitations(mission_id="operation-alpha")
+```
+
+## Data Models
+
+### Mission Model
+
+**Location:** `FreeTAKServer/components/extended/mission/persistence/mission.py:17`
+
+```python
+class Mission(MissionBase):
+    PrimaryKey: str
+    name: str
+    description: str
+    tool: str
+    creatorUid: str
+    createTime: datetime
+    defaultRole: Role
+    passwordProtected: bool
+    classification: str
+    contents: List[MissionContent]
+    externalData: List[ExternalData]
+    logs: List[MissionLog]
+    cots: List[MissionCoT]
+    changes: List[MissionChange]
+    child_missions: List[MissionToMission]
+    parent_missions: List[MissionToMission]
+```
+
+## Notifications
+
+**Controller:** `MissionNotificationController`
+
+Sends CoT notifications for mission events:
+
+```python
+# Mission created notification
+mission.mission_created_notification(mission_id="operation-alpha")
+
+# Content created notification
+mission.mission_content_created_notification(
+    mission_id="operation-alpha",
+    content_hash="sha256hash"
+)
+```
+
+## Integration with Services
+
+### Enterprise Sync Integration
+
+Missions integrate with Enterprise Sync for content storage:
+
+```python
+# Content stored via Enterprise Sync
+self.request.set_value("synctype", "content")
+self.request.set_value("objectdata", file_data)
+self.execute_sub_action("SaveEnterpriseSyncData")
+```
+
+### Service Manager Integration
+
+Mission notifications are routed through the Service Manager to connected clients.
+
+## API Examples
+
+### Complete Mission Workflow
+
+```python
+# 1. Create mission
+mission.put_mission(
+    mission_id="recon-mission-1",
+    mission_data=b'',
+    mission_data_args={
+        'defaultRole': 'MISSION_OWNER',
+        'description': 'Reconnaissance mission',
+        'tool': 'public'
+    },
+    creatorUid="commander-001",
+    config_loader=config
+)
+
+# 2. Add content
+mission.add_mission_contents(
+    mission_id="recon-mission-1",
+    hashes=["content-hash-123"],
+    config_loader=config
+)
+
+# 3. Add subscribers
+mission.add_mission_subscription(
+    mission_id="recon-mission-1",
+    client_uid="operator-001",
+    role="MISSION_SUBSCRIBER"
+)
+
+# 4. Add log entry
+mission.add_mission_log(
+    mission_id="recon-mission-1",
+    content="Mission briefing completed",
+    creator_uid="commander-001"
+)
+
+# 5. Get mission status
+mission_data = mission.get_mission(
+    mission_id="recon-mission-1",
+    config_loader=config
+)
+```
+
+## Best Practices
+
+1. **Mission Naming**: Use descriptive, unique mission IDs
+2. **Role Management**: Set appropriate default roles for mission security
+3. **Change Tracking**: Leverage change records for audit trails
+4. **Subscriptions**: Manage subscriptions to control information flow
+5. **Logs**: Use mission logs for operational record-keeping
+
+## Related Components
+
+- [ExCheck](/components/excheck) - Checklist management for missions
+- [Enterprise Sync](/components/enterprise-sync) - Content storage and synchronization
+- [Emergency](/components/emergency) - Emergency alerts in mission context

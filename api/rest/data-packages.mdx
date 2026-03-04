@@ -1,0 +1,247 @@
+---
+title: "Data Package API"
+description: "Upload, download, and manage data packages on FreeTAKServer"
+---
+
+The Data Package API provides endpoints for managing mission packages, including file uploads, downloads, metadata management, and sharing.
+
+## Upload Data Package
+
+Upload a new data package to the server.
+
+<CodeGroup>
+```bash curl
+curl -X POST "http://localhost:19023/DataPackageTable?filename=package.zip&creatorUid=user-123" \
+  -u "username:password" \
+  -H "Content-Type: application/zip" \
+  -F "assetfile=@/path/to/package.zip"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Query Parameters
+
+<ParamField query="filename" type="string" required>
+  Name of the data package file
+</ParamField>
+
+<ParamField query="creatorUid" type="string" required>
+  UID of the user creating the data package
+</ParamField>
+
+### Request Body
+
+<ParamField body="assetfile" type="file" required>
+  The data package file to upload (typically a .zip file)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  The ID of the uploaded data package
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "success",
+  "id": "42"
+}
+```
+
+## Get Data Package Table
+
+Retrieve metadata for all data packages.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/DataPackageTable" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Response
+
+<ResponseField name="json_list" type="array">
+  Array of data package metadata objects
+  
+  <Expandable title="data package object">
+    <ResponseField name="PrimaryKey" type="string">
+      Unique identifier for the data package
+    </ResponseField>
+    
+    <ResponseField name="Name" type="string">
+      Data package filename
+    </ResponseField>
+    
+    <ResponseField name="Hash" type="string">
+      SHA-256 hash of the file
+    </ResponseField>
+    
+    <ResponseField name="SubmissionUser" type="string">
+      UID of the user who uploaded the package
+    </ResponseField>
+    
+    <ResponseField name="SubmissionDateTime" type="string">
+      ISO 8601 timestamp of upload
+    </ResponseField>
+    
+    <ResponseField name="Size" type="integer">
+      File size in bytes
+    </ResponseField>
+    
+    <ResponseField name="Privacy" type="integer">
+      Privacy level (0 = public, 1 = private)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "json_list": [
+    {
+      "PrimaryKey": "mission-package-123",
+      "Name": "tactical-map.zip",
+      "Hash": "a1b2c3d4e5f6...",
+      "SubmissionUser": "user-uid-123",
+      "SubmissionDateTime": "2024-03-04T12:00:00Z",
+      "Size": 1024000,
+      "Privacy": 0
+    }
+  ]
+}
+```
+
+## Update Data Package Metadata
+
+Update metadata for one or more data packages.
+
+<CodeGroup>
+```bash curl
+curl -X PUT "http://localhost:19023/DataPackageTable" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "DataPackages": [
+      {
+        "PrimaryKey": "package.zip",
+        "Name": "updated-name.zip",
+        "Keywords": "mission, tactical, map",
+        "Privacy": 1
+      }
+    ]
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+<ParamField body="DataPackages" type="array" required>
+  Array of data package update objects
+  
+  <Expandable title="update object">
+    <ParamField body="PrimaryKey" type="string" required>
+      Identifier of the package to update
+    </ParamField>
+    
+    <ParamField body="Name" type="string">
+      New filename for the package
+    </ParamField>
+    
+    <ParamField body="Keywords" type="string">
+      Comma-separated keywords
+    </ParamField>
+    
+    <ParamField body="Privacy" type="integer">
+      Privacy level (0 = public, 1 = private)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "success"
+}
+```
+
+## Delete Data Package
+
+Delete one or more data packages from the server.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE "http://localhost:19023/DataPackageTable" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "DataPackages": [
+      {
+        "hash": "a1b2c3d4e5f6..."
+      }
+    ]
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+<ParamField body="DataPackages" type="array" required>
+  Array of data packages to delete
+  
+  <Expandable title="delete object">
+    <ParamField body="hash" type="string" required>
+      SHA-256 hash of the package to delete
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "success"
+}
+```
+
+## Data Package Storage
+
+Data packages are stored in the Enterprise Sync system with:
+
+- Automatic keyword tagging with `missionpackage`
+- SHA-256 hash calculation for integrity
+- MIME type detection
+- Metadata persistence in the database
+
+## Error Responses
+
+<ResponseField name="500 Internal Server Error">
+  ```json
+  {
+    "message": "An error occurred accessing datapackage details: [error details]"
+  }
+  ```
+</ResponseField>

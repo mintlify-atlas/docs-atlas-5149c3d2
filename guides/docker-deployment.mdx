@@ -1,0 +1,605 @@
+---
+title: Docker Deployment
+description: Deploy FreeTAKServer using Docker and Docker Compose for containerized operations
+---
+
+This guide covers deploying FreeTAKServer using Docker containers, including basic deployment, Docker Compose orchestration, and production configurations.
+
+<Warning>
+Docker deployment is currently not officially supported by the FTS team and should be considered experimental. You may encounter issues that are not present in standard installations.
+</Warning>
+
+## Overview
+
+Docker deployment provides:
+
+- **Isolated Environment**: FTS runs in a container separate from host system
+- **Easy Updates**: Pull new images and restart containers
+- **Portability**: Run on any system with Docker installed
+- **Reproducibility**: Consistent environment across deployments
+- **Volume Persistence**: Data survives container restarts
+
+## Prerequisites
+
+- Docker Engine 20.10 or newer
+- Docker Compose V2
+- At least 2GB available RAM
+- 10GB available disk space
+- Ports 8080-8089, 9000, 19023 available
+
+## Quick Start
+
+<Steps>
+
+### Clone Repository
+
+```bash
+git clone https://github.com/FreeTAKTeam/FreeTakServer.git
+cd FreeTakServer
+```
+
+### Build Docker Image
+
+The repository includes a Dockerfile:
+
+```dockerfile
+# From source Dockerfile
+FROM python:3.11
+
+# Create non-root user
+RUN groupadd -r freetak && useradd -m -r -g freetak freetak
+RUN mkdir /opt/fts ; chown -R freetak:freetak /opt/fts ; chmod 775 /opt/fts
+
+USER freetak
+
+ENV FTS_DATA_PATH="/opt/fts/"
+
+WORKDIR /home/freetak/
+COPY --chown=freetak:freetak FreeTAKServer/ ./FreeTAKServer/
+COPY --chown=freetak:freetak pyproject.toml docker-run.sh ./
+
+# Install dependencies
+ENV PATH /home/freetak/.local/bin:$PATH
+RUN pip install --upgrade pip setuptools wheel poetry
+RUN pip install --force-reinstall "ruamel.yaml<0.18"
+RUN pip install --no-build-isolation --editable .
+
+VOLUME /opt/fts
+
+CMD ["/home/freetak/docker-run.sh"]
+```
+
+Build the image:
+
+```bash
+docker build . -t fts:local
+```
+
+### Create Data Volume
+
+Persist FTS data between container restarts:
+
+```bash
+docker volume create ftsdata
+```
+
+<Note>
+The `ftsdata` volume stores:
+- Database (SQLite)
+- Certificates
+- Data packages
+- ExCheck checklists
+- Logs
+
+**Keep this volume backed up!**
+</Note>
+
+### Run Container
+
+Start FTS in interactive mode for initial testing:
+
+```bash
+docker run -it \
+  -e FTS_DP_ADDRESS="$(curl -s ifconfig.me)" \
+  --mount src=ftsdata,target=/opt/fts \
+  -p 8080:8080 -p 8087:8087 -p 8443:8443 \
+  -p 8089:8089 -p 9000:9000 -p 19023:19023 \
+  fts:local
+```
+
+</Steps>
+
+## Docker Compose Deployment
+
+### Basic Compose Configuration
+
+The repository includes `compose.yaml`:
+
+```yaml
+services:
+  freetakserver:
+    image: freetakserver:latest
+    pull_policy: build
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - free-tak-core-db:/opt/fts/
+    ports:
+      - 8080:8080   # DataPackagePort
+      - 8087:8087   # CoTPort
+      - 8089:8089   # SSLCoTPort
+      - 8443:8443   # SSLDataPackagePort
+      # - 9000:9000   # FederationPort (commented by default)
+      # - 19023:19023 # APIPort (don't expose by default)
+
+    environment:
+      # Security - CHANGE THESE!
+      FTS_FED_PASSWORD: "defaultpass"
+      FTS_CLIENT_CERT_PASSWORD: "password"
+      FTS_SECRET_KEY: "vnkdjnfjknfl1232#"
+      FTS_NODE_ID: "fl5m8j5txlgdtfv8wi96zf8tt0howddo"
+      FTS_CONNECTION_MESSAGE: "Welcome to FreeTAKServer. The Parrot is not dead. It's just resting"
+
+      # Networking
+      FTS_COT_PORT: 8087
+      FTS_SSLCOT_PORT: 8089
+      FTS_API_PORT: 19023
+      FTS_FED_PORT: 9000
+      FTS_DP_ADDRESS: 127.0.0.1
+      FTS_USER_ADDRESS: 127.0.0.1
+      FTS_API_ADDRESS: 0.0.0.0
+
+      # Performance
+      FTS_OPTIMIZE_API: True
+      FTS_DATA_RECEPTION_BUFFER: 1024
+      FTS_MAX_RECEPTION_TIME: 4
+      FTS_NUM_ROUTING_WORKERS: 3
+      FTS_MAINLOOP_DELAY: 100
+
+      # Features
+      FTS_COT_TO_DB: True
+      FTS_EMERGENCY_RADIUS: 0
+      FTS_LOG_LEVEL: "info"
+
+volumes:
+  free-tak-core-db:
+```
+
+### Deploy with Compose
+
+```bash
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop services
+docker compose down
+
+# Stop and remove volumes (WARNING: deletes data)
+docker compose down -v
+```
+
+## Production Configuration
+
+### Environment Variables
+
+Create `.env` file for production settings:
+
+```bash
+# .env
+
+# Security - CHANGE THESE VALUES!
+FTS_SECRET_KEY=your-random-secret-key-here
+FTS_NODE_ID=unique-node-identifier-32chars
+FTS_CLIENT_CERT_PASSWORD=strong-certificate-password
+FTS_FED_PASSWORD=strong-federation-password
+
+# Networking - Use your actual server IP
+FTS_DP_ADDRESS=203.0.113.10
+FTS_USER_ADDRESS=203.0.113.10
+FTS_API_ADDRESS=0.0.0.0
+
+# Ports
+FTS_COT_PORT=8087
+FTS_SSLCOT_PORT=8089
+FTS_API_PORT=19023
+FTS_FED_PORT=9000
+
+# Performance tuning
+FTS_NUM_ROUTING_WORKERS=5
+FTS_MAINLOOP_DELAY=50
+FTS_DATA_RECEPTION_BUFFER=2048
+
+# Logging
+FTS_LOG_LEVEL=info
+
+# Database
+FTS_COT_TO_DB=True
+```
+
+Update `compose.yaml` to use `.env`:
+
+```yaml
+services:
+  freetakserver:
+    image: freetakserver:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - fts-data:/opt/fts/
+    ports:
+      - "8080:8080"
+      - "8087:8087"
+      - "8089:8089"
+      - "8443:8443"
+```
+
+### Persistent Storage
+
+Mount specific directories for better organization:
+
+```yaml
+services:
+  freetakserver:
+    volumes:
+      - fts-db:/opt/fts/db
+      - fts-certs:/opt/fts/certs
+      - fts-datapackages:/opt/fts/FreeTAKServerDataPackageFolder
+      - fts-logs:/opt/fts/Logs
+
+volumes:
+  fts-db:
+  fts-certs:
+  fts-datapackages:
+  fts-logs:
+```
+
+### Resource Limits
+
+Set container resource limits:
+
+```yaml
+services:
+  freetakserver:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+```
+
+## Certificate Management in Docker
+
+### Generate Certificates
+
+```bash
+# Enter running container
+docker exec -it freetakserver bash
+
+# Generate CA and certificates
+python3 << 'EOF'
+from FreeTAKServer.core.util.certificate_generation import AtakOfTheCerts
+
+with AtakOfTheCerts(pwd="your_password") as cert:
+    cert.generate_ca()
+    cert.bake("server", "server")
+    cert.bake("Client", "user")
+EOF
+
+exit
+```
+
+### Extract Client Packages
+
+```bash
+# Copy client package from container
+docker cp freetakserver:/opt/fts/certs/clientPackages/Client.zip ./
+
+# Transfer to clients for import
+```
+
+### Mount External Certificates
+
+Use pre-generated certificates:
+
+```yaml
+services:
+  freetakserver:
+    volumes:
+      - ./certs:/opt/fts/certs:ro
+    environment:
+      FTS_CERTS_PATH: /opt/fts/certs
+```
+
+## Networking
+
+### Port Mapping Reference
+
+| Service | Container Port | Host Port | Protocol | Description |
+|---------|---------------|-----------|----------|-------------|
+| CoT | 8087 | 8087 | TCP | Non-SSL CoT traffic |
+| SSL CoT | 8089 | 8089 | TCP | SSL CoT traffic |
+| Data Package | 8080 | 8080 | HTTP | Data package upload/download |
+| SSL Data Package | 8443 | 8443 | HTTPS | Secure data packages |
+| Federation | 9000 | 9000 | TCP | Server federation |
+| API | 19023 | 19023 | HTTP | REST API (don't expose publicly) |
+
+### Custom Port Mapping
+
+Map to different host ports:
+
+```yaml
+services:
+  freetakserver:
+    ports:
+      - "8087:8087"   # Standard CoT
+      - "8089:8089"   # Standard SSL CoT
+      - "9080:8080"   # Data packages on 9080
+      - "9443:8443"   # SSL data packages on 9443
+```
+
+### Bridge Network
+
+Create custom Docker network:
+
+```yaml
+networks:
+  fts-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+services:
+  freetakserver:
+    networks:
+      fts-network:
+        ipv4_address: 172.20.0.10
+```
+
+## Docker Run Options
+
+### Background Daemon
+
+Run container as daemon:
+
+```bash
+docker run --restart unless-stopped \
+  -e FTS_DP_ADDRESS="$(curl -s ifconfig.me)" \
+  -e FTS_USER_ADDRESS="$(curl -s ifconfig.me)" \
+  -e FTS_CLIENT_CERT_PASSWORD="password" \
+  --mount src=ftsdata,target=/opt/fts \
+  -p 8080:8080 -p 8087:8087 -p 8089:8089 -p 8443:8443 \
+  -p 9000:9000 -p 19023:19023 \
+  --name freetakserver \
+  -d \
+  fts:local
+```
+
+### Container Management
+
+```bash
+# View logs
+docker logs -f freetakserver
+
+# Stop container
+docker stop freetakserver
+
+# Start stopped container
+docker start freetakserver
+
+# Restart container
+docker restart freetakserver
+
+# Remove container
+docker rm freetakserver
+
+# Execute command in container
+docker exec freetakserver ps aux
+
+# Open shell in container
+docker exec -it freetakserver bash
+```
+
+## Data Backup and Restore
+
+### Backup Volume Data
+
+```bash
+# Backup ftsdata volume to tar.gz
+docker run --rm \
+  --mount src=ftsdata,target=/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/fts-backup-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+### Restore from Backup
+
+```bash
+# Create new volume
+docker volume create ftsdata-restored
+
+# Restore data
+docker run --rm \
+  --mount src=ftsdata-restored,target=/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/fts-backup-20260304.tar.gz -C /data
+```
+
+### Export Database
+
+```bash
+# Copy database from container
+docker cp freetakserver:/opt/fts/FTSDataBase.db ./fts-backup.db
+
+# Restore database to container
+docker cp ./fts-backup.db freetakserver:/opt/fts/FTSDataBase.db
+docker restart freetakserver
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+<Note>
+**Common issues:**
+
+1. **Port already in use**
+   ```bash
+   # Check what's using the port
+   sudo netstat -tlnp | grep 8087
+   
+   # Stop conflicting service or use different ports
+   ```
+
+2. **Volume permissions**
+   ```bash
+   # Fix volume ownership
+   docker run --rm -v ftsdata:/data alpine chown -R 1000:1000 /data
+   ```
+
+3. **Image not built**
+   ```bash
+   # Rebuild image
+   docker build --no-cache -t fts:local .
+   ```
+</Note>
+
+### View Container Logs
+
+```bash
+# Follow logs in real-time
+docker logs -f --tail 100 freetakserver
+
+# Search for errors
+docker logs freetakserver 2>&1 | grep -i error
+
+# Export logs to file
+docker logs freetakserver > fts-container.log 2>&1
+```
+
+### Debug Container
+
+```bash
+# Enter container shell
+docker exec -it freetakserver bash
+
+# Check processes
+ps aux
+
+# Check listening ports
+netstat -tlnp
+
+# Verify FTS installation
+python3 -c "import FreeTAKServer; print(FreeTAKServer.__version__)"
+
+# Check configuration
+env | grep FTS_
+```
+
+### Performance Issues
+
+<Warning>
+**Performance tuning:**
+
+1. **Increase worker threads**
+   ```yaml
+   environment:
+     FTS_NUM_ROUTING_WORKERS: 5
+   ```
+
+2. **Reduce main loop delay**
+   ```yaml
+   environment:
+     FTS_MAINLOOP_DELAY: 50
+   ```
+
+3. **Allocate more resources**
+   ```yaml
+   deploy:
+     resources:
+       limits:
+         cpus: '4'
+         memory: 4G
+   ```
+
+4. **Use host networking** (Linux only)
+   ```yaml
+   network_mode: host
+   ```
+</Warning>
+
+## Multi-Container Setup
+
+### Separate Database Container
+
+Run PostgreSQL in separate container (future FTS versions):
+
+```yaml
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: fts
+      POSTGRES_USER: fts
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  freetakserver:
+    depends_on:
+      - postgres
+    environment:
+      FTS_DATABASE_TYPE: PostgreSQL
+      FTS_DB_HOST: postgres
+      FTS_DB_PORT: 5432
+      FTS_DB_NAME: fts
+      FTS_DB_USER: fts
+      FTS_DB_PASSWORD: secure_password
+
+volumes:
+  postgres-data:
+```
+
+## Docker Image Updates
+
+### Pull Latest Changes
+
+```bash
+# Pull latest code
+git pull origin main
+
+# Rebuild image
+docker compose build
+
+# Restart with new image
+docker compose up -d
+```
+
+### Version Pinning
+
+Pin to specific FTS version:
+
+```dockerfile
+# Custom Dockerfile with version pinning
+FROM python:3.11
+
+RUN pip install FreeTAKServer==2.2.1
+
+# ... rest of configuration
+```
+
+## Next Steps
+
+- [Configure SSL](/guides/ssl-configuration) for secure connections
+- [Set up Federation](/guides/federation) with other FTS containers
+- [Monitor container health](/operations/monitoring) with Docker stats
+- [Deploy to production](/deployment/production) with orchestration

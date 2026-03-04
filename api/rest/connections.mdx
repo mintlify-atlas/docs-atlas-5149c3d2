@@ -1,0 +1,188 @@
+---
+title: "Connections API"
+description: "View and manage connected TAK clients"
+---
+
+The Connections API provides endpoints for viewing information about currently connected TAK clients.
+
+## Get Connected Clients
+
+Retrieve a list of all currently connected TAK clients.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/Clients" \
+  -H "X-Forwarded-For: 127.0.0.1"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires IP-based authentication. The requesting IP address must be in the `AllowedCLIIPs` configuration list.
+
+### Response
+
+Returns an array of connected client objects serialized to JSON.
+
+<ResponseField name="array" type="array">
+  Array of connected client objects
+  
+  <Expandable title="client object">
+    <ResponseField name="uid" type="string">
+      Unique identifier for the connected client
+    </ResponseField>
+    
+    <ResponseField name="callsign" type="string">
+      Client's callsign/display name
+    </ResponseField>
+    
+    <ResponseField name="team" type="string">
+      Team/group affiliation
+    </ResponseField>
+    
+    <ResponseField name="role" type="string">
+      Client's role in the team
+    </ResponseField>
+    
+    <ResponseField name="address" type="string">
+      IP address of the connected client
+    </ResponseField>
+    
+    <ResponseField name="lastSeen" type="string">
+      ISO 8601 timestamp of last activity
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+[
+  {
+    "uid": "client-uid-123",
+    "callsign": "ALPHA-1",
+    "team": "Cyan",
+    "role": "Team Leader",
+    "address": "192.168.1.100",
+    "lastSeen": "2024-03-04T12:30:45Z"
+  },
+  {
+    "uid": "client-uid-456",
+    "callsign": "BRAVO-2",
+    "team": "Red",
+    "role": "Rifleman",
+    "address": "192.168.1.101",
+    "lastSeen": "2024-03-04T12:31:20Z"
+  }
+]
+```
+
+## IP-Based Authentication
+
+The `/Clients` endpoint uses IP-based authentication for security. To configure allowed IPs:
+
+1. Edit your FreeTAKServer configuration file
+2. Add IP addresses to the `AllowedCLIIPs` list:
+
+```yaml
+AllowedCLIIPs:
+  - 127.0.0.1
+  - 192.168.1.0/24
+  - 10.0.0.0/8
+```
+
+### Behind a Proxy
+
+If FreeTAKServer is behind a reverse proxy (nginx, Apache, etc.), ensure the proxy forwards the real client IP using headers like:
+
+- `X-Forwarded-For`
+- `X-Real-IP`
+
+The server will check these headers against the allowed IP list.
+
+## Connection Management
+
+The connections API provides read-only access to connection information. To manage connections:
+
+- **Disconnect clients**: Use administrative commands or terminate connections at the CoT service level
+- **Monitor activity**: Use the connection timestamp to detect stale clients
+- **Track teams**: Group clients by team affiliation
+
+## Use Cases
+
+### Server Monitoring
+
+Query the connections endpoint periodically to:
+
+- Monitor server load (number of connected clients)
+- Detect connectivity issues
+- Track team member availability
+- Generate activity reports
+
+### Dashboard Integration
+
+Integrate with monitoring dashboards:
+
+```javascript
+const response = await fetch('http://localhost:19023/Clients', {
+  headers: {
+    'X-Forwarded-For': '127.0.0.1'
+  }
+});
+const clients = await response.json();
+console.log(`Connected clients: ${clients.length}`);
+```
+
+### Team Coordination
+
+Use connection data to:
+
+- Verify team members are online before missions
+- Track team composition in real-time
+- Identify missing or disconnected members
+
+## Connection State
+
+Client connection information is maintained by FreeTAKServer's CoT services:
+
+- **TCP CoT Service**: Port 8087 (default)
+- **SSL CoT Service**: Port 8089 (default)
+
+Clients send periodic position updates (SA - Situation Awareness messages) which update their `lastSeen` timestamp.
+
+## Error Responses
+
+<ResponseField name="401 Unauthorized">
+  ```json
+  {
+    "message": "endpoint can only be accessed by approved IPs"
+  }
+  ```
+  
+  Returned when the requesting IP is not in the `AllowedCLIIPs` list.
+</ResponseField>
+
+<ResponseField name="500 Internal Server Error">
+  ```json
+  {
+    "message": "An error occurred retrieving client details."
+  }
+  ```
+  
+  Returned when an internal error occurs while retrieving connection information.
+</ResponseField>
+
+## Related Endpoints
+
+For user management and authentication, see:
+
+- User Management API (certificate generation, user creation)
+- Authentication endpoints
+
+## Security Considerations
+
+1. **Restrict Access**: Only add trusted IPs to `AllowedCLIIPs`
+2. **Monitor Usage**: Log all requests to this endpoint
+3. **Regular Audits**: Periodically review the allowed IP list
+4. **Network Segmentation**: Place FreeTAKServer in a protected network segment
+5. **Rate Limiting**: Consider implementing rate limiting for this endpoint

@@ -1,122 +1,133 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "FreeTAKServer",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#040404",
+    "light": "#353e9d",
+    "dark": "#939ccb"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/4f254e39-b3d5-4bfb-8ae9-4f0d51ecb4f6.png",
+  "logo": {
+    "light": "https://media.brand.dev/580cb6d8-f6b3-4be3-86a1-d890f6038ca1.svg",
+    "dark": "https://media.brand.dev/580cb6d8-f6b3-4be3-86a1-d890f6038ca1.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/FreeTAKTeam/FreeTakServer"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/FreeTAKTeam/FreeTakServer",
+      "discord": "https://discord.gg/VSukyY5wfD"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/cot-messages",
+              "concepts/services",
+              "concepts/components"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/connecting-clients",
+              "guides/ssl-configuration",
+              "guides/federation",
+              "guides/docker-deployment",
+              "guides/data-packages"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/main-config",
+              "configuration/services",
+              "configuration/database",
+              "configuration/security"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "api/overview",
+              "api/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "REST API",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/rest/missions",
+              "api/rest/data-packages",
+              "api/rest/emergency",
+              "api/rest/geo-objects",
+              "api/rest/excheck",
+              "api/rest/connections"
+            ]
+          },
+          {
+            "group": "TAK API",
+            "pages": [
+              "api/tak/mission-api",
+              "api/tak/enterprise-sync",
+              "api/tak/excheck-api"
+            ]
+          },
+          {
+            "group": "CoT Services",
+            "pages": [
+              "api/cot/tcp-service",
+              "api/cot/ssl-service",
+              "api/cot/message-format"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Components",
+        "groups": [
+          {
+            "group": "Core Components",
+            "pages": [
+              "components/cot-manager",
+              "components/mission",
+              "components/enterprise-sync"
+            ]
+          },
+          {
+            "group": "Extended Components",
+            "pages": [
+              "components/excheck",
+              "components/emergency",
+              "components/federation",
+              "components/track-manager"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

@@ -1,0 +1,260 @@
+---
+title: TCP CoT Service
+description: Documentation for FreeTAKServer's TCP Cursor-on-Target service
+---
+
+The TCP CoT Service provides unencrypted TCP connections for receiving Cursor-on-Target (CoT) messages from ATAK clients and other TAK devices.
+
+## Overview
+
+The TCP CoT Service (`TCPCoTServiceMain`) is responsible for handling CoT communications over standard TCP connections. It listens for incoming connections, processes CoT XML messages, and distributes them to connected clients.
+
+**Default Port:** `8087`
+
+**Protocol:** TCP (unencrypted)
+
+**Message Format:** XML (CoT)
+
+## Service Architecture
+
+### Main Class
+
+`FreeTAKServer.services.tcp_cot_service.tcp_cot_service_main.TCPCoTServiceMain`
+
+The TCP CoT service extends `DigitalPyService` and manages:
+- Socket creation and binding
+- Connection reception
+- Client data handling
+- Message serialization and routing
+- Component response broadcasting
+
+### Key Components
+
+#### Socket Controller
+
+**Class:** `TCPSocketController` (tcp_cot_service_main.py:167)
+
+Creates and configures TCP sockets:
+
+```python
+self.TCPSocketController = TCPSocketController()
+self.TCPSocketController.changeIP(IP)
+self.TCPSocketController.changePort(CoTPort)
+sock = self.TCPSocketController.createSocket()
+```
+
+#### Connection Model
+
+**Class:** `TCPCoTConnection` (model/tcp_cot_connection.py:12)
+
+```python
+class TCPCoTConnection(Connection):
+    def __init__(self, oid=None) -> None:
+        super().__init__("tcp_cot_connection", oid)
+        self._service_id = SERVICE_NAME
+        self._protocol = XML
+        self._model_object: Event = None
+        self._sock: socket = None
+```
+
+Properties:
+- `service_id`: "tcp_cot_service"
+- `protocol`: "XML"
+- `model_object`: Event domain object
+- `sock`: TCP socket instance
+
+## Connection Handling
+
+### Receiving Connections
+
+The service uses `ReceiveConnections` controller to accept new TCP connections (tcp_cot_service_main.py:178):
+
+```python
+receiveConnection = pool.apply_async(ReceiveConnections().listen, (sock,))
+```
+
+### Client Reception
+
+**Class:** `ClientReceptionHandler` (tcp_cot_service_main.py:175)
+
+Handles data reception from connected clients:
+
+```python
+clientData = pool.apply_async(
+    ClientReceptionHandler().startup, (self.client_information_queue,)
+)
+```
+
+**Buffer Size:** 1024 bytes (tcp_cot_service_constants.py:3)
+
+### Connection Flow
+
+1. **Socket Creation** - TCP socket bound to configured IP and port
+2. **Listen for Connections** - Service accepts incoming connections
+3. **Handle Connection** - New connection processed via `handle_connection()` (tcp_cot_service_main.py:761)
+4. **Client Registration** - Client information stored in `client_information_queue`
+5. **Data Reception** - Messages received via `ClientReceptionHandler`
+6. **Message Processing** - CoT XML parsed and routed to components
+
+## Message Processing
+
+### Main Run Function
+
+**Method:** `mainRunFunction()` (tcp_cot_service_main.py:476)
+
+Central loop that:
+- Receives new connections
+- Handles client data
+- Processes shared data from other services
+- Broadcasts component responses
+
+### Data Handling
+
+#### Regular Data
+
+**Method:** `handle_regular_data()` (tcp_cot_service_main.py:705)
+
+Processes CoT messages from clients:
+
+```python
+def handle_regular_data(self, clientDataOutput: List[RawCoT]):
+    for data_object in clientDataOutput:
+        if data_object.xmlString == b"":
+            self.handle_disconnection(data_object.clientInformation)
+            continue
+        # Process the raw CoT data and serialize it
+        self.component_handler(data_object.xmlString)
+```
+
+#### Component Handler
+
+**Method:** `component_handler()` (tcp_cot_service_main.py:276)
+
+Routes CoT data to appropriate components:
+
+1. Convert XML to dictionary: `convert_xml_to_dict()` (tcp_cot_service_main.py:416)
+2. Get human-readable type: `get_human_readable_type()` (tcp_cot_service_main.py:438)
+3. Create request with CoT data
+4. Send to subject for component processing
+
+### Disconnection Handling
+
+**Method:** `handle_disconnection()` (tcp_cot_service_main.py:742)
+
+Handles client disconnections:
+
+```python
+def handle_disconnection(self, client_information):
+    sock = self.client_disconnection_controller.get_sock(client_information)
+    self.client_disconnection_controller.delete_client_connection(client_information)
+    self.client_disconnection_controller.disconnect_socket(sock)
+    connection_id = self.client_disconnection_controller.get_connection_id(client_information)
+    iam_disconnect_request = self.client_disconnection_controller.create_iam_disconnect_request(connection_id)
+    self.subject_send_request(iam_disconnect_request, APPLICATION_PROTOCOL)
+    self.client_disconnection_controller.send_disconnect_cot(client_information)
+```
+
+## Service Metrics
+
+The service tracks operational metrics (tcp_cot_service_main.py:97-106):
+
+```python
+self.connection_received = 0      # Total connections received
+self.sent_message_count = 0       # Messages sent to clients
+self.received_message_count = 0   # Messages received from clients
+self.messages_to_core_count = 0   # Messages sent to core
+self.messages_from_core_count = 0 # Messages received from core
+self.openSockets = 0              # Currently open sockets
+```
+
+### Monitoring
+
+**Method:** `monitor()` (tcp_cot_service_main.py:806)
+
+Logs metrics every 15 seconds:
+
+```python
+self.logger.debug(f"messages sent to clients in {logging_interval} seconds: {self.sent_message_count}")
+self.logger.debug(f"messages received from clients in {logging_interval} seconds: {self.received_message_count}")
+self.logger.debug(f"number of connected client: {str(len(self.connections.keys()))}")
+```
+
+## Configuration
+
+### Service Constants
+
+**File:** `configuration/tcp_cot_service_constants.py`
+
+```python
+SERVICE_NAME = 'tcp_cot_service'
+XML = 'XML'
+DATA_RECEPTION_BUFFER_SIZE = 1024
+```
+
+### Port Configuration
+
+**Default Port:** 8087 (MainConfig.py:70)
+
+```python
+"CoTServicePort": {"default": 8087, "type": int}
+```
+
+## Usage
+
+### Starting the Service
+
+```python
+tcp_service.start(
+    IP=server_ip,
+    CoTPort=8087,
+    Event=event,
+    clientDataPipe=client_pipe,
+    ReceiveConnectionKillSwitch=kill_switch,
+    RestAPIPipe=rest_pipe,
+    clientDataRecvPipe=recv_pipe,
+    factory=object_factory,
+    tracing_provider_instance=tracer
+)
+```
+
+### Client Connection
+
+ATAK clients can connect using:
+
+**Protocol:** TCP
+
+**Port:** 8087
+
+**Host:** FreeTAKServer IP address
+
+**Example connection string:**
+```
+tcp://<server-ip>:8087
+```
+
+## Threading Model
+
+The service uses a ThreadPool for concurrent operations (tcp_cot_service_main.py:171):
+
+```python
+pool = ThreadPool(processes=2)
+```
+
+Two main async tasks:
+1. **Connection Reception** - Accepts new client connections
+2. **Client Data Handler** - Receives data from connected clients
+
+## Related Services
+
+- [SSL CoT Service](/api/cot/ssl-service) - Secure SSL/TLS CoT connections
+- [CoT Message Format](/api/cot/message-format) - CoT XML message structure
+
+## Connection Type
+
+**Property:** `connection_type` (tcp_cot_service_main.py:194)
+
+```python
+@property
+def connection_type(self):
+    return ConnectionTypes.TCP
+```

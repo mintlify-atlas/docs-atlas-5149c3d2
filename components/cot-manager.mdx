@@ -1,0 +1,163 @@
+---
+title: CoT Manager
+description: Component for managing Cursor on Target message routing and group assignments
+---
+
+## Overview
+
+The CoT Manager (COTManager) component is responsible for managing Cursor on Target (CoT) messages within FreeTAKServer. It provides functionality for routing CoT messages and assigning them to specific groups based on business rules and filtering criteria.
+
+## Architecture
+
+### Component Structure
+
+The CoT Manager follows FreeTAKServer's standard component architecture:
+
+```
+FreeTAKServer/components/extended/cotmanager/
+├── cotmanager_facade.py          # Public interface
+├── controllers/
+│   └── cotmanager_general_controller.py
+├── configuration/
+│   └── cotmanager_constants.py
+├── base/
+│   └── cotmanager_action_mapper.py
+└── domain/                        # Domain models
+```
+
+### Key Classes
+
+#### COTManagerFacade
+
+The facade class provides the public interface for the CoT Manager component.
+
+**Location:** `FreeTAKServer/components/extended/cotmanager/cotmanager_facade.py:9`
+
+```python
+class COTManagerFacade(DefaultFacade):
+    def __init__(self):
+        self.assign_cot_to_group = COTManagerGeneralController()
+```
+
+**Purpose:**
+- Isolates internal component complexity from external callers
+- Provides a simple, stable API for CoT management operations
+- Routes requests to appropriate controllers
+
+#### COTManagerGeneralController
+
+Handles the core business logic for CoT message management.
+
+**Location:** `FreeTAKServer/components/extended/cotmanager/controllers/cotmanager_general_controller.py:8`
+
+```python
+class COTManagerGeneralController(Controller):
+    def __init__(self, request, response, sync_action_mapper, configuration):
+        super().__init__(request, response, sync_action_mapper, configuration)
+    
+    def serialize_cotmanager(self, **kwargs):
+        """Serialize the component to a given format"""
+        response = self.execute_sub_action(
+            self.request.get_value("model_object_parser")
+        )
+        self.response.set_value(
+            "serialized_message", response.get_value("serialized_message")
+        )
+```
+
+## Functionality
+
+### CoT Message Routing
+
+The CoT Manager handles routing of Cursor on Target messages based on:
+
+- Group membership
+- User permissions
+- Message type and priority
+- Geographic filtering
+
+### Group Assignment
+
+The `assign_cot_to_group` functionality allows CoT messages to be:
+
+- Associated with specific operational groups
+- Filtered based on group membership
+- Routed to authorized recipients only
+
+### Message Serialization
+
+The component supports serialization of CoT messages to various formats:
+
+```python
+# Serialize CoT message
+request.set_value("model_object_parser", "xml")
+response = cotmanager.serialize_cotmanager()
+xml_message = response.get_value("serialized_message")
+```
+
+## Integration with Services
+
+### Service Manager Integration
+
+The CoT Manager integrates with FreeTAKServer's Service Manager for message processing:
+
+```python
+# CoT messages flow through the Service Manager
+# 1. Service receives CoT message
+# 2. CoT Manager assigns to appropriate group
+# 3. Message routed to subscribers
+```
+
+### Action Mapper Integration
+
+The component uses the action mapper pattern for routing requests:
+
+- External actions defined in action mapping configuration
+- Internal business logic triggered through action mapper
+- Supports both synchronous and asynchronous processing
+
+## Usage Examples
+
+### Basic CoT Assignment
+
+```python
+from FreeTAKServer.components.extended.cotmanager.cotmanager_facade import COTManagerFacade
+
+# Initialize facade
+cot_manager = COTManagerFacade()
+
+# Assign CoT to group
+request.set_value("cot_message", cot_event)
+request.set_value("group_id", "unit-alpha")
+cot_manager.assign_cot_to_group.execute("assign_to_group")
+```
+
+### Custom Message Processing
+
+```python
+# Process CoT with custom serialization
+request.set_value("model_object", cot_event)
+request.set_value("model_object_parser", "json")
+response = controller.serialize_cotmanager()
+```
+
+## Configuration
+
+The CoT Manager component is configured through:
+
+- `cotmanager_constants.py` - Component-specific constants
+- Action mapping files - Define routing rules
+- Business rules - Filter and assignment logic
+
+## Best Practices
+
+1. **Group Management**: Ensure groups are properly configured before assigning CoT messages
+2. **Message Validation**: Validate CoT messages before processing to ensure data integrity
+3. **Error Handling**: Implement proper error handling for failed assignments
+4. **Logging**: Enable appropriate logging levels for debugging message flow
+
+## Related Components
+
+- [Track Manager](/components/track-manager) - Manages entity tracking
+- [Mission](/components/mission) - Mission planning and management
+- [Emergency](/components/emergency) - Emergency alert handling

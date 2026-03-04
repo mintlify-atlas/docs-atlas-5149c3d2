@@ -1,0 +1,191 @@
+---
+title: "Emergency API"
+description: "Create, retrieve, and manage emergency alerts"
+---
+
+The Emergency API provides endpoints for managing emergency alerts in FreeTAKServer. Emergency alerts notify connected clients of urgent situations and can include location data.
+
+## Get Emergencies
+
+Retrieve all active emergency alerts.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/ManageEmergency/getEmergency" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Response
+
+<ResponseField name="json_list" type="array">
+  Array of emergency objects
+  
+  <Expandable title="emergency object">
+    <ResponseField name="uid" type="string">
+      Unique identifier for the emergency
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Callsign of the emergency source or emergency text description
+    </ResponseField>
+    
+    <ResponseField name="type" type="string">
+      Emergency type (e.g., "911 Alert", "Ring The Bell", "Geo-fence Breached", "In Contact")
+    </ResponseField>
+    
+    <ResponseField name="lat" type="float">
+      Latitude coordinate of the emergency
+    </ResponseField>
+    
+    <ResponseField name="lon" type="float">
+      Longitude coordinate of the emergency
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "json_list": [
+    {
+      "uid": "emergency-uid-123",
+      "name": "ALPHA-1",
+      "type": "911 Alert",
+      "lat": 40.7128,
+      "lon": -74.0060
+    }
+  ]
+}
+```
+
+## Create Emergency Alert
+
+Create and broadcast a new emergency alert to all connected clients.
+
+<CodeGroup>
+```bash curl
+curl -X POST "http://localhost:19023/ManageEmergency/postEmergency" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "emergencyType": "911 Alert",
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "name": "ALPHA-1",
+    "remarks": "Medical emergency"
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+<ParamField body="emergencyType" type="string" required>
+  Type of emergency. Valid values:
+  - `911 Alert` - General emergency alert
+  - `Ring The Bell` - Urgent attention required
+  - `Geo-fence Breached` - Location boundary violation
+  - `In Contact` - Contact with hostile forces
+</ParamField>
+
+<ParamField body="latitude" type="float" required>
+  Latitude coordinate of the emergency location
+</ParamField>
+
+<ParamField body="longitude" type="float" required>
+  Longitude coordinate of the emergency location
+</ParamField>
+
+<ParamField body="name" type="string">
+  Callsign or name of the emergency source
+</ParamField>
+
+<ParamField body="remarks" type="string">
+  Additional details about the emergency
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  The UID of the created emergency event
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "emergency-uid-abc123"
+}
+```
+
+## Delete Emergency Alert
+
+Cancel an active emergency alert and notify all clients.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE "http://localhost:19023/ManageEmergency/deleteEmergency" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "uid": "emergency-uid-123"
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+<ParamField body="uid" type="string" required>
+  The UID of the emergency alert to cancel
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  The UID of the cancelled emergency
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "emergency-uid-123"
+}
+```
+
+## Emergency Types
+
+FreeTAKServer supports the following emergency types:
+
+| Type | CoT Type Code | Description |
+|------|---------------|-------------|
+| 911 Alert | `b-a-o-tbl` | General emergency alert |
+| Ring The Bell | `b-a-o-pan` | Urgent attention required |
+| Geo-fence Breached | `b-a-g` | Location boundary violation |
+| In Contact | `b-a-o-opn` | Contact with hostile forces |
+
+## Emergency Broadcasting
+
+When an emergency is created or deleted:
+
+1. The event is serialized to CoT format
+2. Broadcast to all clients on TCP CoT service
+3. Broadcast to all clients on SSL CoT service
+4. Stored in emergency persistence for retrieval
+
+## Error Responses
+
+Emergency endpoints return standard error responses for authentication failures and internal errors. If an emergency object is missing required attributes, it will be logged but not included in the response list.

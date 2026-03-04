@@ -1,0 +1,468 @@
+---
+title: CoT Message Format
+description: Cursor-on-Target XML message format, schema, and construction guide
+---
+
+Cursor-on-Target (CoT) is an XML-based messaging format used for sharing situational awareness information between tactical systems, including ATAK, WinTAK, and FreeTAKServer.
+
+## Overview
+
+CoT messages are XML documents that describe events occurring in time and space. Each CoT message represents an "event" with spatial coordinates, temporal validity, and optional detailed information.
+
+**Format:** XML
+
+**Protocol:** XML over TCP or SSL/TLS
+
+**Namespace:** No formal namespace (legacy format)
+
+## CoT Event Structure
+
+### Basic Schema
+
+A CoT message consists of three main elements:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<event version="2.0" uid="..." type="..." time="..." start="..." stale="..." how="...">
+    <point lat="..." lon="..." hae="..." ce="..." le="..."/>
+    <detail>
+        <!-- Extended information -->
+    </detail>
+</event>
+```
+
+### Event Element
+
+The root `<event>` element contains core attributes:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `version` | String | CoT version (typically "2.0") |
+| `uid` | String | Unique identifier for the event |
+| `type` | String | CoT type taxonomy (e.g., "a-f-G-U-C") |
+| `time` | ISO8601 | When the event was generated |
+| `start` | ISO8601 | When the event becomes valid |
+| `stale` | ISO8601 | When the event expires |
+| `how` | String | How the coordinates were derived |
+
+#### Event Attributes
+
+**version** - CoT protocol version
+```xml
+version="2.0"
+```
+
+**uid** - Unique identifier (100 characters max, event.py:14)
+```xml
+uid="ANDROID-deadbeef-cafe-babe-0123456789ab"
+```
+
+**type** - Event type using CoT taxonomy (100 characters max, event.py:15)
+```xml
+type="a-f-G-U-C"  <!-- Friendly Ground Unit Combat |
+```
+
+**time** - Event creation timestamp
+```xml
+time="2024-03-04T12:00:00Z"
+```
+
+**start** - Event validity start time
+```xml
+start="2024-03-04T12:00:00Z"
+```
+
+**stale** - Event expiration time
+```xml
+stale="2024-03-04T12:05:00Z"
+```
+
+**how** - Method of coordinate derivation
+```xml
+how="m-g"  <!-- GPS derived -->
+```
+
+## Point Element
+
+The `<point>` element defines spatial location (point.py:11-25):
+
+```xml
+<point lat="34.0522" lon="-118.2437" hae="100.0" ce="10.0" le="5.0"/>
+```
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `lat` | Float | Latitude in decimal degrees (point.py:17) |
+| `lon` | Float | Longitude in decimal degrees (point.py:19) |
+| `hae` | Float | Height Above Ellipsoid in meters (point.py:21) |
+| `ce` | Float | Circular Error (horizontal accuracy) in meters (point.py:23) |
+| `le` | Float | Linear Error (vertical accuracy) in meters (point.py:25) |
+
+## Detail Element
+
+The `<detail>` element contains extended information (detail.py:17-30):
+
+```xml
+<detail>
+    <contact callsign="Alpha-1" endpoint="192.168.1.100:4242:tcp"/>
+    <usericon iconsetpath="COT_MAPPING_2525B/a-f/a-f-G-U-C"/>
+    <precisionlocation geopointsrc="GPS" altsrc="GPS"/>
+    <__group name="Red Team" role="Team Member"/>
+    <status battery="85"/>
+    <takv device="SAMSUNG SM-G973U" platform="ATAK-CIV" os="29" version="4.5.1.0"/>
+    <track speed="5.5" course="270.0"/>
+</detail>
+```
+
+Common detail sub-elements:
+- `contact` - Contact information (contact.py)
+- `usericon` - Icon/marker information (usericon.py)
+- `marti` - Marti/TAK server metadata (marti.py)
+- `__group` - Team/group membership
+- `status` - Device/entity status
+- `takv` - TAK version information
+- `track` - Movement data
+
+## CoT Type Taxonomy
+
+### Type Format
+
+CoT types follow the format: `a-f-G-U-C`
+
+Breakdown:
+- `a` - Atom (basic entity)
+- `f` - Friendly (affiliation)
+- `G` - Ground (dimension)
+- `U` - Unit (function)
+- `C` - Combat (status)
+
+### Common Types
+
+#### User Position Updates
+
+**Type:** `a-f-G-U-C` (Friendly Ground Unit Combat)
+
+Used for ATAK user location updates (XMLCoTController.py:174-183):
+
+```xml
+<event version="2.0" uid="ANDROID-user123" type="a-f-G-U-C"
+       time="2024-03-04T12:00:00Z" start="2024-03-04T12:00:00Z"
+       stale="2024-03-04T12:05:00Z" how="m-g">
+    <point lat="34.0522" lon="-118.2437" hae="100.0" ce="10.0" le="5.0"/>
+    <detail>
+        <contact callsign="Alpha-1" endpoint="192.168.1.100:4242:tcp"/>
+        <usericon iconsetpath="COT_MAPPING_2525B/a-f/a-f-G-U-C"/>
+        <__group name="Red Team" role="Team Member"/>
+    </detail>
+</event>
+```
+
+#### GeoChat Messages
+
+**Type:** `b-t-f` (Bits-Text-Freeform)
+
+Used for chat messages (XMLCoTController.py:170-172):
+
+```xml
+<event version="2.0" uid="GeoChat.ANDROID-user123.All Chat Rooms.abc123"
+       type="b-t-f" time="2024-03-04T12:00:00Z"
+       start="2024-03-04T12:00:00Z" stale="2024-03-04T12:05:00Z" how="h-g-i-g-o">
+    <point lat="34.0522" lon="-118.2437" hae="0.0" ce="9999999.0" le="9999999.0"/>
+    <detail>
+        <__chat id="All Chat Rooms" chatroom="All Chat Rooms" groupOwner="false"
+                parent="RootContactGroup" senderCallsign="Alpha-1">
+            <chatgrp uid0="ANDROID-user123" uid1="All Chat Rooms" id="All Chat Rooms"/>
+        </__chat>
+        <link uid="ANDROID-user123" type="a-f-G-U-C" relation="p-p"/>
+        <remarks source="BAO.F.ATAK.ANDROID-user123" time="2024-03-04T12:00:00Z">
+            Hello from Alpha-1!
+        </remarks>
+    </detail>
+</event>
+```
+
+#### Ping Messages
+
+**Type:** `t-x-c-t` (Tasking-Execute-CommsTest-Test)
+
+Used for connection testing (XMLCoTController.py:166-168):
+
+```xml
+<event version="2.0" uid="ping" type="t-x-c-t"
+       time="2024-03-04T12:00:00Z" start="2024-03-04T12:00:00Z"
+       stale="2024-03-04T12:00:10Z" how="m-g">
+    <point lat="0.0" lon="0.0" hae="0.0" ce="9999999.0" le="9999999.0"/>
+    <detail/>
+</event>
+```
+
+#### Map Markers
+
+**Type:** `a-n-G` (Atom-Neutral-Ground)
+
+Used for map points/markers (XMLCoTController.py:185-192):
+
+```xml
+<event version="2.0" uid="marker-123" type="a-n-G"
+       time="2024-03-04T12:00:00Z" start="2024-03-04T12:00:00Z"
+       stale="2024-03-05T12:00:00Z" how="h-e">
+    <point lat="34.0522" lon="-118.2437" hae="100.0" ce="10.0" le="5.0"/>
+    <detail>
+        <contact callsign="Waypoint Alpha"/>
+        <usericon iconsetpath="34ae1613-9645-4222-a9d2-e5f243dea2865/Military/waypoint.png"/>
+        <color value="-1"/>
+        <remarks>Rally point for squad</remarks>
+    </detail>
+</event>
+```
+
+## Processing CoT Messages
+
+### XML Parsing
+
+**Class:** `XMLCoTController` (XMLCoTController.py:33)
+
+FreeTAKServer uses `defusedxml` for secure XML parsing:
+
+```python
+from defusedxml import ElementTree as etree
+
+event = etree.fromstring(xml_string)
+detail = event.find("detail")
+event_type = event.attrib["type"]
+uid = event.attrib["uid"]
+```
+
+### Type Determination
+
+**Method:** `determineCoTType()` (XMLCoTController.py:133)
+
+Routes messages based on type:
+
+```python
+def determineCoTType(self, RawCoT):
+    event = etree.fromstring(RawCoT.xmlString)
+    detail = event.find("detail")
+    
+    if detail.find("emergency") != None:
+        RawCoT.CoTType = "SendEmergencyController"
+    elif str(event.attrib["type"]) == "t-x-c-t":
+        RawCoT.CoTType = "SendPingController"
+    elif str(event.attrib["type"]) == "b-t-f":
+        RawCoT.CoTType = "SendGeoChatController"
+    # ... additional type checking
+    
+    return RawCoT
+```
+
+### XML to Dictionary Conversion
+
+**Method:** `convert_xml_to_dict()` (tcp_cot_service_main.py:416)
+
+```python
+def convert_xml_to_dict(self, data) -> dict:
+    request = ObjectFactory.get_new_instance("request")
+    request.set_action("XMLToDict")
+    request.set_value("message", data)
+    
+    actionmapper = ObjectFactory.get_instance("syncactionMapper")
+    response = ObjectFactory.get_new_instance("response")
+    actionmapper.process_action(request, response)
+    
+    data_dict = response.get_value("dict")
+    return data_dict
+```
+
+### Model to XML Conversion
+
+**Method:** `convert_to_xml()` (tcp_cot_service_main.py:314)
+
+```python
+def convert_to_xml(self, model_object: Node) -> str:
+    sync_action_mapper = ObjectFactory.get_instance("syncactionmapper")
+    
+    # Get machine readable type
+    request = ObjectFactory.get_instance("request")
+    response = ObjectFactory.get_instance("response")
+    request.set_action("ConvertHumanReadableToMachineReadable")
+    request.set_value("human_readable_type", model_object.type)
+    sync_action_mapper.process_action(request, response)
+    model_object.type = response.get_value("machine_readable_type")
+    
+    # Convert to XML
+    request = ObjectFactory.get_instance("request")
+    response = ObjectFactory.get_instance("response")
+    request.set_action("NodeToXML")
+    request.set_value("node", model_object)
+    sync_action_mapper.process_action(request, response)
+    
+    return response.get_value("message")
+```
+
+## Domain Model
+
+### Event Model
+
+**Class:** `Event` (cot_management/persistence/event.py:12)
+
+```python
+class Event(CoTManagementBase):
+    __tablename__ = "Event"
+    uid: str = Column(String(100), primary_key=True)
+    type: str = Column(String(100))
+    how: str = Column(String)
+    time: str = Column(String)
+    start: str = Column(String)
+    stale: str = Column(String)
+    
+    detail: 'Detail' = relationship("Detail", back_populates="event", uselist=False)
+    point: 'Point' = relationship("Point", back_populates="event", uselist=False)
+```
+
+### Point Model
+
+**Class:** `Point` (cot_management/persistence/point.py:11)
+
+```python
+class Point(CoTManagementBase):
+    __tablename__ = "Point"
+    uid: str = Column(String, ForeignKey("Event.uid"), primary_key=True)
+    event: 'Event' = relationship("Event", back_populates="point")
+    lat: float = Column(Float)
+    lon: float = Column(Float)
+    hae: float = Column(Float)
+    ce: float = Column(Float)
+    le: float = Column(Float)
+```
+
+### Detail Model
+
+**Class:** `Detail` (cot_management/persistence/detail.py:17)
+
+```python
+class Detail(CoTManagementBase):
+    __tablename__ = "Detail"
+    uid: str = Column(String, ForeignKey("Event.uid"), primary_key=True)
+    contact: 'Contact' = relationship("Contact", back_populates="detail", uselist=False)
+    usericon: 'Usericon' = relationship("Usericon", back_populates="detail", uselist=False)
+    marti: 'Marti' = relationship("Marti", back_populates="detail", uselist=False)
+    xml_content: str = Column(String)
+    event: 'Event' = relationship("Event", back_populates="detail")
+```
+
+## Constructing CoT Messages
+
+### Python Example
+
+```python
+from datetime import datetime, timedelta
+from lxml import etree
+
+def create_position_cot(uid, callsign, lat, lon, hae=0.0):
+    # Calculate timestamps
+    now = datetime.utcnow()
+    time_str = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    start_str = time_str
+    stale = now + timedelta(minutes=5)
+    stale_str = stale.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    
+    # Create event element
+    event = etree.Element("event")
+    event.set("version", "2.0")
+    event.set("uid", uid)
+    event.set("type", "a-f-G-U-C")
+    event.set("time", time_str)
+    event.set("start", start_str)
+    event.set("stale", stale_str)
+    event.set("how", "m-g")
+    
+    # Create point element
+    point = etree.SubElement(event, "point")
+    point.set("lat", str(lat))
+    point.set("lon", str(lon))
+    point.set("hae", str(hae))
+    point.set("ce", "10.0")
+    point.set("le", "5.0")
+    
+    # Create detail element
+    detail = etree.SubElement(event, "detail")
+    
+    # Add contact
+    contact = etree.SubElement(detail, "contact")
+    contact.set("callsign", callsign)
+    
+    # Add usericon
+    usericon = etree.SubElement(detail, "usericon")
+    usericon.set("iconsetpath", "COT_MAPPING_2525B/a-f/a-f-G-U-C")
+    
+    # Convert to XML string
+    xml_string = etree.tostring(event, encoding="UTF-8", xml_declaration=True)
+    return xml_string
+
+# Usage
+cot_message = create_position_cot(
+    uid="ANDROID-device123",
+    callsign="Alpha-1",
+    lat=34.0522,
+    lon=-118.2437,
+    hae=100.0
+)
+```
+
+### Sending CoT Messages
+
+#### Via TCP Service
+
+```python
+import socket
+
+def send_cot_tcp(host, port, cot_xml):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((host, port))
+    sock.sendall(cot_xml)
+    sock.close()
+
+# Send to FreeTAKServer
+send_cot_tcp("192.168.1.100", 8087, cot_message)
+```
+
+#### Via SSL Service
+
+```python
+import ssl
+import socket
+
+def send_cot_ssl(host, port, cot_xml, certfile, keyfile):
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    context.check_hostname = False
+    
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ssl_sock = context.wrap_socket(sock, server_hostname=host)
+    ssl_sock.connect((host, port))
+    ssl_sock.sendall(cot_xml)
+    ssl_sock.close()
+
+# Send to FreeTAKServer SSL
+send_cot_ssl(
+    "192.168.1.100", 8089, cot_message,
+    certfile="client.pem",
+    keyfile="client-key.pem"
+)
+```
+
+## Message Validation
+
+CoT messages should validate:
+
+1. **Well-formed XML** - Valid XML structure
+2. **Required attributes** - event, uid, type, time, start, stale
+3. **Valid timestamps** - ISO8601 format, stale > start
+4. **Coordinate ranges** - lat: -90 to 90, lon: -180 to 180
+5. **Type taxonomy** - Valid CoT type string
+
+## Related Documentation
+
+- [TCP CoT Service](/api/cot/tcp-service) - TCP service implementation
+- [SSL CoT Service](/api/cot/ssl-service) - SSL service implementation
+- [CoT Manager Component](/components/cot-manager) - CoT processing and routing

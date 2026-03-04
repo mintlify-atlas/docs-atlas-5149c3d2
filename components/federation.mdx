@@ -1,0 +1,461 @@
+---
+title: Federation
+description: Component for multi-server connectivity and TAK server federation
+---
+
+## Overview
+
+The Federation component enables FreeTAKServer to connect with other TAK servers, facilitating inter-server communication, data sharing, and collaborative operations. It supports federation with both modern FreeTAKServer instances and legacy TAK servers, enabling seamless integration across diverse TAK ecosystems.
+
+## Architecture
+
+### Component Structure
+
+```
+FreeTAKServer/components/extended/federation/
+├── federation_facade.py           # Public interface
+├── controllers/
+│   ├── federation_general_controller.py
+│   ├── federation_controller.py
+│   ├── federation_api_controller.py
+│   ├── federation_config_api_controller.py
+│   ├── federation_persistence.py
+│   └── federation_sender_controller.py
+├── configuration/
+│   └── federation_constants.py
+└── base/
+    └── federation_action_mapper.py
+```
+
+### Key Classes
+
+#### FederationFacade
+
+**Location:** `FreeTAKServer/components/extended/federation/federation_facade.py:9`
+
+```python
+class FederationFacade(DefaultFacade):
+    def __init__(self):
+        # Connection management
+        self.federation_connection = FederationGeneralController()
+        self.federation_connection_legacy_tak_server = FederationGeneralController()
+        self.federation_disconnect_from_server = FederationGeneralController()
+        
+        # CoT operations
+        self.federation_send_cot = FederationGeneralController()
+        self.federation_broadcast_cot = FederationGeneralController()
+        
+        # Presence management
+        self.federation_create_presence = FederationGeneralController()
+        self.federation_update_presence = FederationGeneralController()
+        self.federation_delete_presence = FederationGeneralController()
+        
+        # Chat operations
+        self.federation_chat_121 = FederationGeneralController()
+        self.federation_chat_all = FederationGeneralController()
+        
+        # File sharing
+        self.federation_share_files = FederationGeneralController()
+```
+
+#### FederationGeneralController
+
+**Location:** `FreeTAKServer/components/extended/federation/controllers/federation_general_controller.py:8`
+
+```python
+class FederationGeneralController(Controller):
+    def __init__(self, request, response, sync_action_mapper, configuration):
+        super().__init__(request, response, sync_action_mapper, configuration)
+    
+    def serialize_federation(self, **kwargs):
+        """Serialize federation component to given format"""
+        response = self.execute_sub_action(
+            self.request.get_value("model_object_parser")
+        )
+        self.response.set_value(
+            "serialized_message", response.get_value("serialized_message")
+        )
+```
+
+#### FederationController
+
+**Location:** `FreeTAKServer/components/extended/federation/controllers/federation_controller.py:13`
+
+Handles federation business logic and CoT parsing:
+
+```python
+class FederationController(DefaultBusinessRuleController):
+    def __init__(
+        self, request, response, action_mapper, 
+        configuration, federation_action_mapper
+    ):
+        super().__init__(
+            business_rules_path=COMPONENT_NAME_BUSINESS_RULES_PATH,
+            request=request,
+            response=response,
+            configuration=configuration,
+            action_mapper=action_mapper,
+            internal_action_mapper=federation_action_mapper,
+        )
+```
+
+## Core Functionality
+
+### Server Connection Management
+
+#### Connecting to FreeTAKServer
+
+```python
+# Connect to another FreeTAKServer instance
+federation.federation_connection.execute("connect", 
+    server_address="192.168.1.100",
+    server_port=8087,
+    protocol="ssl",
+    credentials={
+        "cert": "client.crt",
+        "key": "client.key",
+        "ca": "ca.crt"
+    }
+)
+```
+
+#### Connecting to Legacy TAK Server
+
+```python
+# Connect to legacy TAK server
+federation.federation_connection_legacy_tak_server.execute("connect",
+    server_address="tak.server.mil",
+    server_port=8089,
+    protocol="ssl",
+    federation_name="CONUS-EAST",
+    credentials=credentials
+)
+```
+
+#### Disconnecting from Server
+
+```python
+# Disconnect from federated server
+federation.federation_disconnect_from_server.execute("disconnect",
+    server_id="server-001"
+)
+```
+
+### CoT Message Federation
+
+#### Sending CoT to Federated Server
+
+```python
+# Send specific CoT to federated server
+federation.federation_send_cot.execute("send",
+    cot_message=cot_event,
+    destination_server="server-001",
+    filter_groups=["alpha", "bravo"]
+)
+```
+
+#### Broadcasting CoT
+
+```python
+# Broadcast CoT to all federated servers
+federation.federation_broadcast_cot.execute("broadcast",
+    cot_message=cot_event,
+    exclude_servers=["local-test"],
+    priority="high"
+)
+```
+
+### Presence Synchronization
+
+#### Creating Presence
+
+```python
+# Create presence on federated server
+federation.federation_create_presence.execute("create",
+    server_id="server-001",
+    user_uid="local-user-123",
+    callsign="Alpha-1",
+    location={
+        "lat": 40.7128,
+        "lon": -74.0060,
+        "hae": 10.0
+    },
+    team_name="Blue",
+    team_role="Team Lead"
+)
+```
+
+#### Updating Presence
+
+```python
+# Update presence information
+federation.federation_update_presence.execute("update",
+    server_id="server-001",
+    user_uid="local-user-123",
+    location={
+        "lat": 40.7150,
+        "lon": -74.0080,
+        "hae": 12.0
+    },
+    status="On Mission"
+)
+```
+
+#### Deleting Presence
+
+```python
+# Remove presence from federated server
+federation.federation_delete_presence.execute("delete",
+    server_id="server-001",
+    user_uid="local-user-123"
+)
+```
+
+### Chat Federation
+
+#### One-to-One Chat
+
+```python
+# Send 1:1 chat message to user on federated server
+federation.federation_chat_121.execute("send",
+    from_uid="local-user-123",
+    to_uid="remote-user-456",
+    to_server="server-001",
+    message="Message content",
+    chat_group="Team Alpha"
+)
+```
+
+#### Broadcast Chat
+
+```python
+# Broadcast chat to all users on federated server
+federation.federation_chat_all.execute("broadcast",
+    from_uid="local-user-123",
+    server_id="server-001",
+    message="All teams, this is command center",
+    chat_group="All"
+)
+```
+
+### File Sharing
+
+```python
+# Share file with federated server
+federation.federation_share_files.execute("share",
+    server_id="server-001",
+    file_hash="sha256hash",
+    file_name="mission-briefing.pdf",
+    sender_uid="local-user-123",
+    recipient_uids=["remote-user-456", "remote-user-789"],
+    metadata={
+        "mime_type": "application/pdf",
+        "keywords": ["briefing", "mission"]
+    }
+)
+```
+
+## Federation Architecture
+
+### Connection Types
+
+**SSL/TLS Federation:**
+- Secure encrypted connections
+- Certificate-based authentication
+- Mutual TLS support
+
+**TCP Federation:**
+- Non-encrypted connections (for internal networks)
+- IP-based filtering
+
+### Data Flow
+
+```
+Local FTS → Federation Component → Federated Server
+    ↓                                      ↓
+  Local Clients                      Remote Clients
+```
+
+**Inbound Flow:**
+1. Federated server sends data
+2. Federation component receives and validates
+3. Data routed to local clients
+4. Processed by appropriate components
+
+**Outbound Flow:**
+1. Local component generates data
+2. Federation component serializes
+3. Filters applied (groups, permissions)
+4. Transmitted to federated server(s)
+
+## Configuration
+
+### Federation Constants
+
+**File:** `federation_constants.py`
+
+```python
+COMPONENT_NAME = "federation"
+BASE_OBJECT_NAME = "Event"
+COMPONENT_NAME_BUSINESS_RULES_PATH = "..."
+ACTION_MAPPING_PATH = "..."
+INTERNAL_ACTION_MAPPING_PATH = "..."
+```
+
+### Server Configuration
+
+```python
+# Example federation configuration
+federation_config = {
+    "servers": [
+        {
+            "id": "server-001",
+            "name": "Regional HQ",
+            "address": "tak.hq.mil",
+            "port": 8089,
+            "protocol": "ssl",
+            "enabled": True,
+            "groups": ["command", "intel"],
+            "credentials": {
+                "cert": "/path/to/client.crt",
+                "key": "/path/to/client.key",
+                "ca": "/path/to/ca.crt"
+            }
+        },
+        {
+            "id": "server-002",
+            "name": "Field Operations",
+            "address": "192.168.1.50",
+            "port": 8087,
+            "protocol": "tcp",
+            "enabled": True,
+            "groups": ["operations"]
+        }
+    ]
+}
+```
+
+## Message Filtering
+
+Federation supports filtering of federated data:
+
+```python
+# Filter configuration
+filters = {
+    "groups": ["authorized-group-1", "authorized-group-2"],
+    "message_types": ["a-f-G-U-C", "b-m-p-s-p-loc"],
+    "geographic_bounds": {
+        "north": 45.0,
+        "south": 35.0,
+        "east": -70.0,
+        "west": -80.0
+    },
+    "exclude_uids": ["test-user", "simulator-001"]
+}
+```
+
+## Serialization
+
+**Method:** `serialize_federation()`
+
+Supports multiple serialization formats:
+
+```python
+# Serialize to XML (CoT)
+request.set_value("model_object_parser", "xml")
+response = federation.serialize_federation()
+xml_message = response.get_value("serialized_message")
+
+# Serialize to JSON
+request.set_value("model_object_parser", "json")
+response = federation.serialize_federation()
+json_message = response.get_value("serialized_message")
+```
+
+## Complete Federation Example
+
+```python
+from FreeTAKServer.components.extended.federation.federation_facade import FederationFacade
+
+# 1. Initialize federation
+federation = FederationFacade()
+
+# 2. Connect to federated server
+federation.federation_connection.execute("connect",
+    server_address="remote.tak.server",
+    server_port=8089,
+    protocol="ssl",
+    credentials=credentials
+)
+
+# 3. Create presence on federated server
+federation.federation_create_presence.execute("create",
+    server_id="remote-server",
+    user_uid="local-user-001",
+    callsign="Command-1",
+    location={"lat": 40.7128, "lon": -74.0060}
+)
+
+# 4. Send CoT to federated server
+federation.federation_send_cot.execute("send",
+    cot_message=situation_report,
+    destination_server="remote-server"
+)
+
+# 5. Broadcast chat message
+federation.federation_chat_all.execute("broadcast",
+    server_id="remote-server",
+    from_uid="local-user-001",
+    message="Situation update: All clear"
+)
+
+# 6. Share file
+federation.federation_share_files.execute("share",
+    server_id="remote-server",
+    file_hash="abc123...",
+    file_name="intel-report.pdf",
+    sender_uid="local-user-001"
+)
+
+# 7. Update presence
+federation.federation_update_presence.execute("update",
+    server_id="remote-server",
+    user_uid="local-user-001",
+    location={"lat": 40.7150, "lon": -74.0080}
+)
+
+# 8. Disconnect
+federation.federation_disconnect_from_server.execute("disconnect",
+    server_id="remote-server"
+)
+```
+
+## Best Practices
+
+1. **Security**: Always use SSL/TLS for production federations
+2. **Filtering**: Configure appropriate message filters to reduce traffic
+3. **Monitoring**: Monitor federation connection health
+4. **Credentials**: Securely manage certificates and keys
+5. **Testing**: Test federation links before operational use
+6. **Documentation**: Document all federated server configurations
+7. **Redundancy**: Configure multiple federation paths for reliability
+
+## Troubleshooting
+
+**Connection Issues:**
+- Verify network connectivity
+- Check certificate validity
+- Confirm port accessibility
+- Review firewall rules
+
+**Data Not Federating:**
+- Check filter configurations
+- Verify group memberships
+- Review action mappings
+- Confirm serialization format
+
+## Related Components
+
+- [CoT Manager](/components/cot-manager) - CoT message routing
+- [Mission](/components/mission) - Federated mission sharing
+- [Track Manager](/components/track-manager) - Presence synchronization

@@ -1,0 +1,199 @@
+---
+title: Introduction
+description: Overview of FreeTAKServer, an open source Python implementation of the TAK Server
+---
+
+FreeTAKServer (FTS) is a Python3 implementation of a TAK Server for tactical devices like ATAK, WinTAK, and ITAK. It's a free and open source solution released under the Eclipse Public License 2.0 (EPL-2.0).
+
+## What is FreeTAKServer?
+
+FTS enables TAK clients to connect and share geospatial information, communicate through chat, exchange files, and collaborate in real-time. It's designed to be cross-platform and can run from multi-node cloud installations on AWS down to Android devices.
+
+As a Python-based alternative to the legacy TAK server, FTS provides full server functionality for the TAK ecosystem without licensing restrictions.
+
+## Key features
+
+FreeTAKServer supports a comprehensive set of tactical server capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Web administration" icon="globe">
+    Browser-based management interface for server configuration and monitoring
+  </Card>
+  
+  <Card title="Federation service" icon="network-wired">
+    Connect two or more FTS instances to create distributed networks
+  </Card>
+  
+  <Card title="Data packages" icon="box">
+    Upload, share, and retrieve data packages across all connected clients
+  </Card>
+  
+  <Card title="SSL encryption" icon="lock">
+    Secure communications with SSL/TLS encryption support
+  </Card>
+  
+  <Card title="REST API" icon="code">
+    Extensive REST API for integrations and custom extensions
+  </Card>
+  
+  <Card title="COT recording" icon="database">
+    Store Cursor on Target (COT) events in SQLAlchemy database
+  </Card>
+</CardGroup>
+
+### Additional capabilities
+
+- Image transfer and storage
+- Command line interface for server management
+- ExCheck plugin support for task lists (WinTAK and ATAK)
+- KML generation for geospatial data
+- Multi-protocol support (TCP and SSL)
+
+## Use cases
+
+### Tactical coordination
+
+Connect ATAK clients in the field to share real-time location data, create markers, and coordinate movements. Teams can maintain situational awareness without relying on commercial services.
+
+### Emergency response
+
+Emergency services can deploy FTS as a self-contained coordination platform for disaster response, search and rescue operations, or incident management.
+
+### Training and simulation
+
+Organizations can set up isolated FTS instances for training exercises without requiring internet connectivity or external infrastructure.
+
+### Research and development
+
+Developers can use FTS to build and test TAK integrations, plugins, and custom tactical applications using the open REST API.
+
+## Architecture overview
+
+FreeTAKServer follows a Model-View-Controller (MVC) architecture pattern with a modular service-oriented design.
+
+### Core architecture
+
+```
+FreeTAKServer/
+├── controllers/     # Business logic and service orchestration
+├── models/          # COT domain objects and data models
+├── views/           # API endpoints and client interfaces
+├── services/        # Independent service modules
+│   ├── tcp_cot_service/      # TCP-based COT handling
+│   ├── ssl_cot_service/      # SSL-encrypted COT handling
+│   ├── rest_api_service/     # REST API endpoints
+│   ├── http_tak_api_service/ # HTTP TAK API
+│   └── https_tak_api_service/# HTTPS TAK API
+└── components/      # Pluggable components and extensions
+```
+
+### Domain model
+
+FTS uses a Model Driven Architecture (MDA) approach where Cursor on Target (COT) concepts are represented as domain classes generated from UML models. This ensures consistency with TAK protocol specifications.
+
+<Note>
+COT (Cursor on Target) is the core data format used by TAK applications to exchange tactical information including positions, markers, routes, and other geospatial data.
+</Note>
+
+### Service architecture
+
+FTS runs multiple independent services that communicate through inter-service communication (ISC) mechanisms:
+
+- **TCP CoT Service**: Handles unencrypted client connections on port 8087 (default)
+- **SSL CoT Service**: Manages encrypted client connections with certificate authentication
+- **REST API Service**: Provides HTTP REST endpoints for integrations
+- **TAK API Services**: Implements TAK-compatible HTTP/HTTPS APIs for data packages and missions
+- **Federation Services**: Manages server-to-server connections
+
+### Technology stack
+
+<CodeGroup>
+```python Core framework
+# Built on Flask web framework
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+# Uses DigitalPy framework for service management
+from digitalpy.core.main.DigitalPy import DigitalPy
+```
+
+```python Data handling
+# XML parsing with lxml
+from lxml import etree
+
+# Protocol buffers for efficient serialization
+import protobuf
+
+# ZeroMQ for inter-service messaging
+import zmq
+```
+
+```python Async operations
+# Eventlet for concurrent connections
+import eventlet
+
+# Multiprocessing for service isolation
+import multiprocessing
+```
+</CodeGroup>
+
+### Database layer
+
+FTS uses SQLAlchemy ORM for database operations, supporting:
+
+- COT event storage and retrieval
+- User authentication and authorization
+- Data package metadata
+- Mission and ExCheck data
+- Client connection tracking
+
+## Project status
+
+FreeTAKServer is currently in **Production Stage** and actively maintained by the FreeTAKTeam. The project has reached version 2.2+ and is deployed in various production environments.
+
+<Info>
+A public FTS instance is available for testing at `137.184.101.250:8087` (TCP). You can download the configuration and import it into ATAK to try the service.
+</Info>
+
+### Community
+
+Join the FreeTAKServer community:
+
+- [Discord Server](https://discord.gg/VSukyY5wfD) - Official FreeTAKServer Discord
+- [GitHub Repository](https://github.com/FreeTAKTeam/FreeTakServer) - Source code and issue tracking
+- [Documentation](https://freetakteam.github.io/FreeTAKServer-User-Docs/) - Comprehensive user documentation
+- [r/ATAK Subreddit](https://www.reddit.com/r/ATAK/) - Community discussions
+
+## System requirements
+
+Before installing FreeTAKServer, ensure your system meets these requirements:
+
+- **Python**: 3.11 or higher
+- **Operating System**: Linux, Windows, or macOS
+- **Memory**: Minimum 2GB RAM (4GB+ recommended for production)
+- **Storage**: 1GB+ for application and database
+- **Network**: Open ports for services (8087, 8080, 8443 by default)
+
+<Warning>
+FreeTAKServer requires Python 3.11. Earlier versions are not supported in version 2.x.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get FTS running in minutes with our quick start guide
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation instructions for all platforms
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/main-config">
+    Configure services, ports, and security settings
+  </Card>
+  
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore the REST API for custom integrations
+  </Card>
+</CardGroup>

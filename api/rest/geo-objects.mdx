@@ -1,0 +1,351 @@
+---
+title: "Geo Object API"
+description: "Create, update, retrieve, and manage geo-spatial objects on the map"
+---
+
+The Geo Object API provides endpoints for managing geographical objects (markers, units, points of interest) on the tactical map.
+
+## Create Geo Object
+
+Create a new geographical object and broadcast it to all clients.
+
+<CodeGroup>
+```bash curl
+curl -X POST "http://localhost:19023/ManageGeoObject/postGeoObject" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "geoObject": "Ground",
+    "attitude": "friendly",
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "how": "gps",
+    "name": "Checkpoint Alpha",
+    "timeout": 3600,
+    "remarks": "Primary checkpoint",
+    "repeat": false
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+<ParamField body="geoObject" type="string" required>
+  Type of geographical object. See [Geo Object Types](#geo-object-types) for valid values.
+</ParamField>
+
+<ParamField body="attitude" type="string" required>
+  Attitude/affiliation of the object:
+  - `friendly` / `friend` - Friendly forces
+  - `hostile` - Hostile forces
+  - `neutral` - Neutral entities
+  - `unknown` - Unknown affiliation
+</ParamField>
+
+<ParamField body="latitude" type="float">
+  Latitude coordinate. Required if `address` is not provided.
+</ParamField>
+
+<ParamField body="longitude" type="float">
+  Longitude coordinate. Required if `address` is not provided.
+</ParamField>
+
+<ParamField body="address" type="string">
+  Address to geocode into coordinates. Alternative to providing latitude/longitude.
+</ParamField>
+
+<ParamField body="how" type="string" required>
+  How the position was determined. See [How Values](#how-values) for valid values.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Display name/callsign for the object
+</ParamField>
+
+<ParamField body="timeout" type="integer" required>
+  Time in seconds until the object goes stale (0 for persistent)
+</ParamField>
+
+<ParamField body="remarks" type="string">
+  Additional notes about the object
+</ParamField>
+
+<ParamField body="repeat" type="boolean">
+  Whether to save this object for repeated broadcasting (default: false)
+</ParamField>
+
+<ParamField body="link_uid" type="string">
+  UID of another object to link to
+</ParamField>
+
+<ParamField body="distance" type="float">
+  Distance in meters to offset from base coordinates
+</ParamField>
+
+<ParamField body="bearing" type="float">
+  Bearing in degrees for distance offset (default: 360)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  The UID of the created geo object
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "geo-object-uid-abc123"
+}
+```
+
+## Update Geo Object
+
+Update an existing geographical object by UID.
+
+<CodeGroup>
+```bash curl
+curl -X PUT "http://localhost:19023/ManageGeoObject/putGeoObject" \
+  -u "username:password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "uid": "geo-object-uid-123",
+    "geoObject": "Ground",
+    "attitude": "friendly",
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "how": "gps",
+    "name": "Checkpoint Alpha - Updated",
+    "timeout": 3600
+  }'
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Request Body
+
+Same as [Create Geo Object](#create-geo-object), with the addition of:
+
+<ParamField body="uid" type="string" required>
+  The UID of the existing object to update
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "geo-object-uid-123"
+}
+```
+
+## Get Geo Objects
+
+Query geographical objects within a specified radius.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/ManageGeoObject/getGeoObject?latitude=40.7128&longitude=-74.0060&radius=1000&attitude=friendly" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Query Parameters
+
+<ParamField query="latitude" type="float" required>
+  Center latitude for search
+</ParamField>
+
+<ParamField query="longitude" type="float" required>
+  Center longitude for search
+</ParamField>
+
+<ParamField query="radius" type="integer">
+  Search radius in meters (default: 100)
+</ParamField>
+
+<ParamField query="attitude" type="string">
+  Filter by attitude: `friendly`, `hostile`, `neutral`, `unknown`, or `*` for all (default: `*`)
+</ParamField>
+
+### Response
+
+Returns an array of geo objects within the specified radius.
+
+<ResponseField name="array" type="array">
+  <Expandable title="geo object">
+    <ResponseField name="latitude" type="float">
+      Object latitude
+    </ResponseField>
+    
+    <ResponseField name="longitude" type="float">
+      Object longitude
+    </ResponseField>
+    
+    <ResponseField name="distance" type="float">
+      Distance in meters from query center
+    </ResponseField>
+    
+    <ResponseField name="direction" type="float">
+      Bearing in degrees from query center
+    </ResponseField>
+    
+    <ResponseField name="type" type="string">
+      Geo object type
+    </ResponseField>
+    
+    <ResponseField name="attitude" type="string">
+      Object attitude/affiliation
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+```json
+[
+  {
+    "latitude": 40.7129,
+    "longitude": -74.0061,
+    "distance": 15.2,
+    "direction": 45.3,
+    "type": "Ground",
+    "attitude": "friendly"
+  }
+]
+```
+
+## Get Repeated Messages
+
+Retrieve all geo objects marked for repeated broadcasting.
+
+<CodeGroup>
+```bash curl
+curl -X GET "http://localhost:19023/ManageGeoObject/GetRepeatedMessages" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Response
+
+<ResponseField name="messages" type="object">
+  Dictionary mapping UIDs to CoT XML messages
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "messages": {
+    "uid-123": "<?xml version='1.0'?><event>...</event>",
+    "uid-456": "<?xml version='1.0'?><event>...</event>"
+  }
+}
+```
+
+## Delete Repeated Messages
+
+Remove geo objects from repeated broadcasting.
+
+<CodeGroup>
+```bash curl
+curl -X DELETE "http://localhost:19023/ManageGeoObject/DeleteRepeatedMessage?ids=uid-123,uid-456" \
+  -u "username:password"
+```
+</CodeGroup>
+
+### Authentication
+
+This endpoint requires HTTP Basic Authentication.
+
+### Query Parameters
+
+<ParamField query="ids" type="string" required>
+  Comma-separated list of message UIDs to delete
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "operation successful"
+}
+```
+
+## Geo Object Types
+
+Common geo object types include:
+
+### Squad/Infantry Types
+- `Sniper` - `a-.-G-U-C-I-d`
+- `Medic` - `a-.-G-U-i-m-etf`
+- `Recon` - `a-.-G-U-C-R`
+- `LMG` - `a-.-G-E-W-R`
+- `Grenadier` - `a-.-G-E-W-Z`
+- `anti Tank` - `a-.-G-U-C-A-A`
+- `AA` - `a-.-G-U-C-D`
+- `Engineer` - `a-.-G-U-C-E`
+- `Mortar` - `a-.-G-E-W-O`
+
+### Emergency Services
+- `Vehicle` - `a-.-G-E-V-C`
+- `Ambulance` - `a-.-G-E-V-m`
+- `Hospital` - `a-.-G-I-X-H`
+- `Police Station` - `a-.-G-I-i-l`
+- `Emergency Station` - `a-.-G-I-i-e`
+- `SAR` - `a-.-A-M-F-Q-H`
+- `Medevac` - `a-.-G-U-C-V-R-E`
+
+### Incidents
+- `Incident` - `a-.-X-i-o`
+- `fire` - `a-.-X-i-f`
+- `earthquake` - `a-.-X-i-g-e`
+- `avalanche` - `a-.-X-i-g-a`
+- `vehicle accident` - `a-.-X-i-t-v-a`
+
+### Generic
+- `Ground` - `a-.-G`
+
+## How Values
+
+Valid values for the `how` parameter:
+
+- `gps` - GPS derived
+- `human` / `retyped` - Human entered
+- `machine` - Machine generated
+- `mensurated` - Measured from imagery
+- `estimated` - Estimated position
+- `nonCoT` / `gigo` - Non-CoT source
+
+## Error Responses
+
+<ResponseField name="500 Internal Server Error">
+  ```json
+  {
+    "message": "An error occurred adding geo object."
+  }
+  ```
+  
+  Or for retrieval:
+  
+  ```json
+  {
+    "message": "An error occurred retrieving geo object."
+  }
+  ```
+</ResponseField>

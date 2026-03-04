@@ -1,0 +1,597 @@
+---
+title: "Service Configuration"
+description: "Configure TCP CoT, SSL CoT, REST API, and TAK API services"
+icon: "server"
+---
+
+## Overview
+
+FreeTAKServer provides multiple network services for TAK clients and applications:
+
+- **TCP CoT Service**: Unencrypted Cursor on Target message service
+- **SSL CoT Service**: TLS-encrypted Cursor on Target message service
+- **REST API Service**: RESTful HTTP API for programmatic access
+- **HTTP TAK API Service**: HTTP endpoint for TAK protocol operations
+- **HTTPS TAK API Service**: Secure HTTPS endpoint for TAK protocol operations
+
+Each service can be configured independently through MainConfig settings.
+
+## TCP CoT Service
+
+The TCP CoT service handles unencrypted TAK Cursor on Target (CoT) messages over TCP.
+
+### Configuration
+
+<ParamField path="CoTServicePort" type="integer" default="8087">
+  TCP port for unencrypted CoT connections
+  
+  **Environment variable:** `FTS_COT_PORT`
+  
+  **YAML:** `Addresses.FTS_COT_PORT`
+</ParamField>
+
+<ParamField path="DataReceptionBuffer" type="integer" default="1024">
+  Buffer size in bytes for receiving CoT data from clients
+  
+  **Environment variable:** `FTS_DATA_RECEPTION_BUFFER`
+  
+  **YAML:** `System.FTS_DATA_RECEPTION_BUFFER`
+</ParamField>
+
+<ParamField path="MaxReceptionTime" type="integer" default="4">
+  Maximum time in seconds to wait for data reception before timeout
+  
+  **Environment variable:** `FTS_MAX_RECEPTION_TIME`
+  
+  **YAML:** `System.FTS_MAX_RECEPTION_TIME`
+</ParamField>
+
+### Service Constants
+
+Defined in `FreeTAKServer/services/tcp_cot_service/configuration/tcp_cot_service_constants.py`:
+
+```python
+SERVICE_NAME = 'tcp_cot_service'
+XML = 'XML'
+DATA_RECEPTION_BUFFER_SIZE = 1024
+```
+
+### Message Types
+
+- `SEND_TO_ALL (0)`: Broadcast message to all connected clients
+- `SEND_TO_SOME (1)`: Send message to specific clients
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_COT_PORT: 8087
+
+System:
+  FTS_DATA_RECEPTION_BUFFER: 2048
+  FTS_MAX_RECEPTION_TIME: 5
+```
+
+**Environment Variables:**
+```bash
+export FTS_COT_PORT=8087
+export FTS_DATA_RECEPTION_BUFFER=2048
+export FTS_MAX_RECEPTION_TIME=5
+```
+
+### Client Connection
+
+TAK clients connect to the TCP CoT service using:
+- **Protocol:** TCP
+- **Host:** Server IP address
+- **Port:** `CoTServicePort` (default 8087)
+- **Encryption:** None
+
+<Warning>
+  The TCP CoT service transmits data unencrypted. Use only in trusted networks or for testing. For production deployments, use the SSL CoT service instead.
+</Warning>
+
+## SSL CoT Service
+
+The SSL CoT service handles TLS-encrypted TAK Cursor on Target messages.
+
+### Configuration
+
+<ParamField path="SSLCoTServicePort" type="integer" default="8089">
+  TCP port for SSL/TLS encrypted CoT connections
+  
+  **Environment variable:** `FTS_SSLCOT_PORT`
+  
+  **YAML:** `Addresses.FTS_SSLCOT_PORT`
+</ParamField>
+
+<ParamField path="keyDir" type="string" default="/opt/fts/certs/server.key">
+  Path to server private key file
+  
+  **Environment variable:** `FTS_SERVER_KEYDIR`
+  
+  **YAML:** `Certs.FTS_SERVER_KEYDIR`
+</ParamField>
+
+<ParamField path="pemDir" type="string" default="/opt/fts/certs/server.pem">
+  Path to server certificate file (PEM format)
+  
+  **Environment variable:** `FTS_SERVER_PEMDIR`
+  
+  **YAML:** `Certs.FTS_SERVER_PEMDIR`
+</ParamField>
+
+<ParamField path="CA" type="string" default="/opt/fts/certs/ca.pem">
+  Path to Certificate Authority (CA) certificate
+  
+  **Environment variable:** `FTS_CADIR`
+  
+  **YAML:** `Certs.FTS_CADIR`
+</ParamField>
+
+<ParamField path="CAkey" type="string" default="/opt/fts/certs/ca.key">
+  Path to Certificate Authority private key
+  
+  **Environment variable:** `FTS_CAKEYDIR`
+  
+  **YAML:** `Certs.FTS_CAKEYDIR`
+</ParamField>
+
+<ParamField path="password" type="string" default="supersecret">
+  Password for client certificate generation
+  
+  **Environment variable:** `FTS_CLIENT_CERT_PASSWORD`
+  
+  **YAML:** `Certs.FTS_CLIENT_CERT_PASSWORD`
+</ParamField>
+
+<ParamField path="unencryptedKey" type="string" default="/opt/fts/certs/server.key.unencrypted">
+  Path to unencrypted server key (used internally)
+  
+  **Environment variable:** `FTS_UNENCRYPTED_KEYDIR`
+  
+  **YAML:** `Certs.FTS_UNENCRYPTED_KEYDIR`
+</ParamField>
+
+<ParamField path="p12Dir" type="string" default="/opt/fts/certs/server.p12">
+  Path to PKCS#12 format certificate bundle
+  
+  **Environment variable:** `FTS_SERVER_P12DIR`
+  
+  **YAML:** `Certs.FTS_SERVER_P12DIR`
+</ParamField>
+
+### Service Constants
+
+Defined in `FreeTAKServer/services/ssl_cot_service/configuration/ssl_cot_service_constants.py`:
+
+```python
+SERVICE_NAME = 'ssl_cot_service'
+XML = "XML"
+DATA_RECEPTION_BUFFER_SIZE = 1024
+```
+
+### SSL/TLS Settings
+
+From `FreeTAKServer/core/configuration/ReceiveConnectionsConstants.py`:
+
+- **WRAP_SSL_TIMEOUT**: `1.0` seconds
+- **SSL_SOCK_TIMEOUT**: `60` seconds
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_SSLCOT_PORT: 8089
+
+Certs:
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/server.pem"
+  FTS_CADIR: "/opt/fts/certs/ca.pem"
+  FTS_CAKEYDIR: "/opt/fts/certs/ca.key"
+  FTS_CLIENT_CERT_PASSWORD: "your-secure-password"
+```
+
+**Environment Variables:**
+```bash
+export FTS_SSLCOT_PORT=8089
+export FTS_SERVER_KEYDIR="/opt/fts/certs/server.key"
+export FTS_SERVER_PEMDIR="/opt/fts/certs/server.pem"
+export FTS_CADIR="/opt/fts/certs/ca.pem"
+```
+
+### Client Connection
+
+TAK clients connect to the SSL CoT service using:
+- **Protocol:** TCP with TLS
+- **Host:** Server IP address
+- **Port:** `SSLCoTServicePort` (default 8089)
+- **Encryption:** TLS with client certificate authentication
+- **Client Certificate:** Required (generated by FTS or TAK Server)
+
+<Tip>
+  Use the SSL CoT service for production deployments to ensure encrypted communications and client certificate authentication.
+</Tip>
+
+## REST API Service
+
+The REST API provides programmatic HTTP access to FreeTAKServer functionality.
+
+### Configuration
+
+<ParamField path="APIPort" type="integer" default="19023">
+  Port for the REST API service
+  
+  **Environment variable:** `FTS_API_PORT`
+  
+  **YAML:** `Addresses.FTS_API_PORT`
+</ParamField>
+
+<ParamField path="APIIP" type="string" default="0.0.0.0">
+  IP address for the REST API service to bind to
+  
+  **Environment variable:** `FTS_API_ADDRESS`
+  
+  **YAML:** `Addresses.FTS_API_ADDRESS`
+</ParamField>
+
+<ParamField path="OptimizeAPI" type="boolean" default="true">
+  Enable API optimizations for better performance
+  
+  **Environment variable:** `FTS_OPTIMIZE_API`
+  
+  **YAML:** `System.FTS_OPTIMIZE_API`
+</ParamField>
+
+### Authentication
+
+The REST API uses Bearer token authentication with HTTPTokenAuth.
+
+From `FreeTAKServer/services/rest_api_service/controllers/authentication.py`:
+
+```python
+from flask_httpauth import HTTPTokenAuth
+
+auth = HTTPTokenAuth(scheme='Bearer')
+```
+
+Tokens are validated against:
+- `APIUser` table for API users
+- `SystemUser` table for system users
+
+Successful authentication logs API calls to the database with:
+- User ID
+- Timestamp
+- Request content
+- Endpoint URL
+
+### API Endpoints
+
+The REST API provides blueprints for:
+
+- **Data Packages**: Upload and manage data packages
+- **Emergencies**: Create and manage emergency notifications
+- **ExCheck**: Checklist management
+- **GeoObjects**: Create and manage geographic objects
+- **Missions**: Mission planning and coordination
+- **User Management**: User administration
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_API_PORT: 19023
+  FTS_API_ADDRESS: "0.0.0.0"
+
+System:
+  FTS_OPTIMIZE_API: true
+```
+
+**Environment Variables:**
+```bash
+export FTS_API_PORT=19023
+export FTS_API_ADDRESS="0.0.0.0"
+export FTS_OPTIMIZE_API=true
+```
+
+### API Usage
+
+```bash
+# Authenticate and get token
+curl -X POST http://server-ip:19023/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password"}'
+
+# Use token for authenticated requests
+curl -X GET http://server-ip:19023/api/users \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+### Default Values
+
+From `FreeTAKServer/core/configuration/RestAPIVariables.py`:
+
+```python
+defaultGeoObjectTimeout = 300  # seconds
+defaultPresenceTimeout = 500   # seconds
+defaultPresenceType = "a-f-G-U-C-I"
+```
+
+## HTTP TAK API Service
+
+HTTP endpoint for TAK protocol operations (unencrypted).
+
+### Configuration
+
+<ParamField path="HTTPTakAPIPort" type="integer" default="8080">
+  HTTP port for TAK API service
+  
+  **Environment variable:** `FTS_HTTP_TAK_API_PORT`
+</ParamField>
+
+### Endpoints
+
+The HTTP TAK API service provides:
+
+- **Enterprise Sync**: Data synchronization for TAK clients
+- **Missions**: Mission management
+- **ExCheck**: Checklist operations
+- **CITRAP**: Critical Infrastructure TAK Reporting and Analysis Platform
+- **Misc**: Various utility endpoints
+
+### Example Configuration
+
+**Environment Variables:**
+```bash
+export FTS_HTTP_TAK_API_PORT=8080
+```
+
+<Warning>
+  The HTTP TAK API transmits data unencrypted. Use only in trusted networks. For production, use the HTTPS TAK API service.
+</Warning>
+
+## HTTPS TAK API Service
+
+Secure HTTPS endpoint for TAK protocol operations.
+
+### Configuration
+
+<ParamField path="HTTPSTakAPIPort" type="integer" default="8443">
+  HTTPS port for secure TAK API service
+  
+  **Environment variable:** `FTS_HTTPS_TAK_API_PORT`
+</ParamField>
+
+Certificate configuration is shared with the SSL CoT service (see SSL CoT Service section).
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_HTTPS_TAK_API_PORT: 8443
+
+Certs:
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/server.pem"
+```
+
+**Environment Variables:**
+```bash
+export FTS_HTTPS_TAK_API_PORT=8443
+export FTS_SERVER_KEYDIR="/opt/fts/certs/server.key"
+export FTS_SERVER_PEMDIR="/opt/fts/certs/server.pem"
+```
+
+## Data Package Service
+
+Configuration for the data package distribution service.
+
+### Configuration
+
+<ParamField path="DataPackageServiceDefaultIP" type="string" default="auto-detected">
+  IP address used for data package URLs. **Must be set correctly for private data packages to work.**
+  
+  **Environment variable:** `FTS_DP_ADDRESS`
+  
+  **YAML:** `Addresses.FTS_DP_ADDRESS`
+</ParamField>
+
+<ParamField path="DataPackageFilePath" type="string" default="/opt/fts/FreeTAKServerDataPackageFolder">
+  Directory for storing uploaded data packages
+  
+  **Environment variable:** `FTS_DATAPACKAGE_PATH`
+  
+  **YAML:** `Filesystem.FTS_DATAPACKAGE_PATH`
+</ParamField>
+
+### Constants
+
+From `FreeTAKServer/core/configuration/DataPackageServerConstants.py`:
+
+```python
+DATABASE = 'FreeTAKServerDataPackageDataBase.db'
+APIPORT = '8080'
+DEFAULTRETURN = 'other'
+DATA PACKAGEFOLDER = 'FreeTAKServerDataPackageFolder'
+HTTPDEBUG = False
+HTTPMETHODS = ['POST', 'GET', 'PUT']
+IP = "0.0.0.0"
+```
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_DP_ADDRESS: "192.168.1.100"  # Your server's IP
+
+Filesystem:
+  FTS_DATAPACKAGE_PATH: "/opt/fts/FreeTAKServerDataPackageFolder"
+```
+
+<Tip>
+  Set `DataPackageServiceDefaultIP` to your server's public IP or domain name. TAK clients use this address to download data packages.
+</Tip>
+
+## Federation Service
+
+Configuration for federating with other TAK servers.
+
+### Configuration
+
+<ParamField path="FederationPort" type="integer" default="9000">
+  Port for federation service connections
+  
+  **Environment variable:** `FTS_FED_PORT`
+  
+  **YAML:** `Addresses.FTS_FED_PORT`
+</ParamField>
+
+<ParamField path="federationCert" type="string" default="/opt/fts/certs/server.pem">
+  Certificate for federation connections
+  
+  **Environment variable:** `FTS_FEDERATION_CERTDIR`
+  
+  **YAML:** `Certs.FTS_FEDERATION_CERTDIR`
+</ParamField>
+
+<ParamField path="federationKey" type="string" default="/opt/fts/certs/server.key">
+  Private key for federation connections
+  
+  **Environment variable:** `FTS_FEDERATION_KEYDIR`
+  
+  **YAML:** `Certs.FTS_FEDERATION_KEYDIR`
+</ParamField>
+
+<ParamField path="federationKeyPassword" type="string" default="defaultpass">
+  Password for the federation key
+  
+  **Environment variable:** `FTS_FEDERATION_KEYPASS`
+  
+  **YAML:** `Certs.FTS_FEDERATION_KEYPASS`
+</ParamField>
+
+### Example Configuration
+
+**YAML:**
+```yaml
+Addresses:
+  FTS_FED_PORT: 9000
+
+Certs:
+  FTS_FEDERATION_CERTDIR: "/opt/fts/certs/federation.pem"
+  FTS_FEDERATION_KEYDIR: "/opt/fts/certs/federation.key"
+  FTS_FEDERATION_KEYPASS: "secure-password"
+```
+
+## Service Management
+
+### Starting Services
+
+Services are typically started together when launching FreeTAKServer:
+
+```bash
+python -m FreeTAKServer.controllers.Orchestrator
+```
+
+### Service Status
+
+Default service status values from `RestAPIVariables.py`:
+
+```python
+defaultCoTIP = '0.0.0.0'
+defaultCoTPort = 15777
+defaultCoTStatus = 'start'
+
+defaultSSLCoTIP = '0.0.0.0'
+defaultSSLCoTPort = 15778
+defaultSSLCoTStatus = 'start'
+
+defaultDataPackageIP = '0.0.0.0'
+defaultDataPackagePort = 8080
+defaultDataPackageStatus = 'start'
+```
+
+### REST API Control
+
+Services can be controlled via the REST API:
+
+```bash
+# Check server status
+curl -X GET http://server-ip:19023/api/status \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Start all services
+curl -X POST http://server-ip:19023/api/start_all \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Stop all services
+curl -X POST http://server-ip:19023/api/stop_all \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Complete Service Configuration Example
+
+```yaml
+System:
+  FTS_NODE_ID: "production-fts-01"
+  FTS_OPTIMIZE_API: true
+  FTS_DATA_RECEPTION_BUFFER: 2048
+  FTS_MAX_RECEPTION_TIME: 5
+
+Addresses:
+  # CoT Services
+  FTS_COT_PORT: 8087
+  FTS_SSLCOT_PORT: 8089
+  
+  # TAK API Services
+  FTS_HTTP_TAK_API_PORT: 8080
+  FTS_HTTPS_TAK_API_PORT: 8443
+  
+  # REST API
+  FTS_API_PORT: 19023
+  FTS_API_ADDRESS: "0.0.0.0"
+  
+  # Federation
+  FTS_FED_PORT: 9000
+  
+  # Data Packages
+  FTS_DP_ADDRESS: "your-server-ip"
+  FTS_USER_ADDRESS: "your-server-ip"
+
+Certs:
+  FTS_SERVER_KEYDIR: "/opt/fts/certs/server.key"
+  FTS_SERVER_PEMDIR: "/opt/fts/certs/server.pem"
+  FTS_CADIR: "/opt/fts/certs/ca.pem"
+  FTS_CAKEYDIR: "/opt/fts/certs/ca.key"
+  FTS_CLIENT_CERT_PASSWORD: "secure-password"
+  FTS_FEDERATION_CERTDIR: "/opt/fts/certs/federation.pem"
+  FTS_FEDERATION_KEYDIR: "/opt/fts/certs/federation.key"
+  FTS_FEDERATION_KEYPASS: "federation-password"
+
+Filesystem:
+  FTS_DATAPACKAGE_PATH: "/opt/fts/FreeTAKServerDataPackageFolder"
+```
+
+## Best Practices
+
+<Warning>
+  Always use encrypted services (SSL CoT, HTTPS TAK API) for production deployments to protect sensitive tactical data.
+</Warning>
+
+<Tip>
+  Configure `DataPackageServiceDefaultIP` and `UserConnectionIP` to match the IP address or domain name that clients use to connect.
+</Tip>
+
+- Use SSL/TLS services for production environments
+- Keep certificate files secure with appropriate filesystem permissions
+- Regularly rotate certificates and passwords
+- Monitor service logs for connection issues
+- Use different ports for each service to avoid conflicts
+- Configure firewalls to allow only necessary service ports
+- Set appropriate buffer sizes based on your network conditions
+- Use the REST API for automated monitoring and management

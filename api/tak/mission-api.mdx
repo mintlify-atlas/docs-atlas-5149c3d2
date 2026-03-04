@@ -1,0 +1,525 @@
+---
+title: 'Mission API'
+description: 'TAK Server Mission API endpoints for managing missions, subscriptions, and mission content'
+---
+
+## Overview
+
+The Mission API provides TAK-compatible endpoints for creating and managing missions, mission subscriptions, mission content, and mission logs. These endpoints are available on both HTTP and HTTPS TAK API services.
+
+## Base Endpoints
+
+### List All Missions
+
+<RequestExample>
+```bash
+GET /Marti/api/missions
+```
+</RequestExample>
+
+Returns a list of all available missions.
+
+<ResponseExample>
+```json
+{
+  "version": "3",
+  "type": "Mission",
+  "data": [...],
+  "nodeId": "<server-node-id>"
+}
+```
+</ResponseExample>
+
+### Create or Update Mission
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{mission_id}
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Unique identifier for the mission
+</ParamField>
+
+<ParamField query="creatorUid" type="string">
+  UID of the mission creator
+</ParamField>
+
+<ResponseField name="mission_subscription" type="object">
+  Mission subscription details for the created/updated mission
+</ResponseField>
+
+Creates a new mission or updates an existing one. Triggers a `MissionCreatedNotification` asynchronously.
+
+### Get Mission Details
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{mission_id}
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Unique identifier for the mission
+</ParamField>
+
+<ResponseField name="mission" type="object">
+  Complete mission details including metadata, contents, and subscriptions
+</ResponseField>
+
+## Mission Content
+
+### Get Mission CoT Events
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{mission_id}/cot
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Unique identifier for the mission
+</ParamField>
+
+Returns all Cursor-on-Target (CoT) events associated with the mission.
+
+<ResponseField name="cots" type="array">
+  Array of CoT event objects
+</ResponseField>
+
+### Add Mission Contents
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{mission_id}/contents
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Unique identifier for the mission
+</ParamField>
+
+<ParamField body="hashes" type="array">
+  Array of content hashes to add to the mission
+</ParamField>
+
+<ParamField body="uids" type="array">
+  Array of UIDs to add to the mission
+</ParamField>
+
+Adds data package contents or UIDs to a mission. Triggers `MissionContentCreatedNotification` for each hash.
+
+<ResponseExample>
+```json
+{
+  "version": "3",
+  "type": "Mission",
+  "data": [...]
+}
+```
+</ResponseExample>
+
+### Upload Mission Package
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{mission_id}/contents/missionpackage
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Unique identifier for the mission
+</ParamField>
+
+<ParamField query="filename" type="string" required>
+  Name of the file being uploaded
+</ParamField>
+
+<ParamField query="creatorUid" type="string">
+  UID of the creator
+</ParamField>
+
+<ParamField query="tool" type="string" default="public">
+  Tool/privacy setting ("public" or "private")
+</ParamField>
+
+<ParamField query="hash" type="string">
+  Optional hash for the content (auto-generated if not provided)
+</ParamField>
+
+Directly uploads a mission package file. The file is stored in Enterprise Sync and automatically added to the mission.
+
+## Mission Logs
+
+### Create Log Entry
+
+<RequestExample>
+```bash
+POST /Marti/api/missions/logs/entries
+```
+</RequestExample>
+
+<ParamField body="mission_log_data" type="object" required>
+  Log entry data in TAK format
+</ParamField>
+
+Creates a new mission log entry. Returns HTTP 201 on success.
+
+<ResponseField name="log" type="object">
+  Created log entry with generated ID
+</ResponseField>
+
+### Update Log Entry
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/logs/entries
+```
+</RequestExample>
+
+<ParamField body="mission_log_data" type="object" required>
+  Updated log entry data
+</ParamField>
+
+### Get Mission Logs
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{missionID}/log
+```
+</RequestExample>
+
+<ParamField path="missionID" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField query="secago" type="integer">
+  Get logs from the last N seconds
+</ParamField>
+
+<ParamField query="start" type="string">
+  Start timestamp for log range
+</ParamField>
+
+<ParamField query="end" type="string">
+  End timestamp for log range
+</ParamField>
+
+### Delete Log Entry
+
+<RequestExample>
+```bash
+DELETE /Marti/api/missions/logs/entries/{id}
+```
+</RequestExample>
+
+<ParamField path="id" type="string" required>
+  Log entry identifier
+</ParamField>
+
+### Get All Logs
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/all/logs
+```
+</RequestExample>
+
+Returns all mission logs across all missions.
+
+## Mission Subscriptions
+
+### Subscribe to Mission
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{mission_id}/subscription
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField query="uid" type="string" required>
+  Client UID subscribing to the mission
+</ParamField>
+
+<ParamField query="topic" type="string">
+  Subscription topic
+</ParamField>
+
+<ParamField query="password" type="string">
+  Mission password if required
+</ParamField>
+
+<ParamField query="secago" type="integer">
+  Sync data from last N seconds
+</ParamField>
+
+<ParamField query="start" type="string">
+  Start time for sync
+</ParamField>
+
+<ParamField query="end" type="string">
+  End time for sync
+</ParamField>
+
+Subscribes a client to a mission. Returns HTTP 201 on successful subscription.
+
+### Unsubscribe from Mission
+
+<RequestExample>
+```bash
+DELETE /Marti/api/missions/{mission_id}/subscription
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField query="uid" type="string" required>
+  Client UID to unsubscribe
+</ParamField>
+
+<ParamField query="topic" type="string">
+  Subscription topic
+</ParamField>
+
+<ParamField query="disconnectOnly" type="boolean">
+  Only disconnect without removing subscription data
+</ParamField>
+
+### Get Mission Subscriptions
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{mission_id}/subscriptions
+GET /Marti/api/missions/{mission_id}/subscriptions/roles
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+Returns all subscriptions for a specific mission.
+
+### Get All Subscriptions
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/all/subscriptions
+```
+</RequestExample>
+
+Returns all mission subscriptions across all missions.
+
+## Mission Hierarchy
+
+### Add Child Mission
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{child_mission_id}/parent/{parent_mission_id}
+```
+</RequestExample>
+
+<ParamField path="child_mission_id" type="string" required>
+  Child mission identifier
+</ParamField>
+
+<ParamField path="parent_mission_id" type="string" required>
+  Parent mission identifier
+</ParamField>
+
+Establishes a parent-child relationship between missions.
+
+### Remove Parent Mission
+
+<RequestExample>
+```bash
+DELETE /Marti/api/missions/{child_mission_id}/parent
+```
+</RequestExample>
+
+<ParamField path="child_mission_id" type="string" required>
+  Child mission identifier
+</ParamField>
+
+### Get Child Missions
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{parent_mission_id}/children
+```
+</RequestExample>
+
+<ParamField path="parent_mission_id" type="string" required>
+  Parent mission identifier
+</ParamField>
+
+### Get Parent Mission
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{child_mission_id}/parent
+```
+</RequestExample>
+
+<ParamField path="child_mission_id" type="string" required>
+  Child mission identifier
+</ParamField>
+
+## Mission Invitations
+
+### Send Mission Invitation (PUT)
+
+<RequestExample>
+```bash
+PUT /Marti/api/missions/{mission_id}/invite/{type}/{invitee}
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  Invitation type
+</ParamField>
+
+<ParamField path="invitee" type="string" required>
+  UID of the invitee
+</ParamField>
+
+<ParamField query="creatorUid" type="string" default="unknown">
+  UID of the invitation sender
+</ParamField>
+
+<ParamField query="role" type="string">
+  Mission role for the invitee
+</ParamField>
+
+### Send Mission Invitation (POST)
+
+<RequestExample>
+```bash
+POST /Marti/api/missions/{mission_id}/invite
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField query="creatorUid" type="string">
+  UID of the invitation sender
+</ParamField>
+
+<ParamField query="contacts" type="string">
+  Invitee contact information
+</ParamField>
+
+<ParamField body="invitee" type="string">
+  UID of the invitee (in request body)
+</ParamField>
+
+<ParamField body="role" type="object">
+  Role object with type field
+</ParamField>
+
+### Get Mission Invitations
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/invitations
+```
+</RequestExample>
+
+<ParamField query="clientUid" type="string" required>
+  Client UID to get invitations for (HTTPS only)
+</ParamField>
+
+<Note>
+The HTTP variant returns an empty invitations list, while HTTPS requires a `clientUid` query parameter and returns actual invitations.
+</Note>
+
+## Mission Changes and External Data
+
+### Get Mission Changes
+
+<RequestExample>
+```bash
+GET /Marti/api/missions/{mission_id}/changes
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+Returns the change history for a mission.
+
+### Create External Mission Data
+
+<RequestExample>
+```bash
+POST /Marti/api/missions/{mission_id}/externaldata
+```
+</RequestExample>
+
+<ParamField path="mission_id" type="string" required>
+  Mission identifier
+</ParamField>
+
+<ParamField body="mission_external_data" type="object" required>
+  External data object (e.g., ExCheck checklists)
+</ParamField>
+
+## Groups
+
+### Get All Groups
+
+<RequestExample>
+```bash
+GET /Marti/api/groups/all
+```
+</RequestExample>
+
+Returns all available groups. Currently returns the system `__ANON__` group.
+
+<ResponseExample>
+```json
+{
+  "version": "3",
+  "type": "com.bbn.marti.remote.groups.Group",
+  "data": [
+    {
+      "name": "__ANON__",
+      "direction": "OUT",
+      "created": "2023-02-22",
+      "type": "SYSTEM",
+      "bitpos": 2,
+      "active": true
+    }
+  ],
+  "nodeId": "<server-node-id>"
+}
+```
+</ResponseExample>
+
+## HTTP vs HTTPS Differences
+
+Both HTTP and HTTPS TAK API services implement the same mission endpoints with these key differences:
+
+- **Controller**: HTTP uses `HTTPTakApiCommunicationController`, HTTPS uses `HTTPSTakApiCommunicationController`
+- **Invitations**: HTTP returns empty list, HTTPS requires `clientUid` and returns actual invitations
+- **URL Scheme**: Mission upload returns `http://` URLs for HTTP service, `https://` for HTTPS service
+
+## Source Code References
+
+- HTTP Blueprint: `FreeTAKServer/services/http_tak_api_service/blueprints/mission_blueprint.py`
+- HTTPS Blueprint: `FreeTAKServer/services/https_tak_api_service/blueprints/mission_blueprint.py`

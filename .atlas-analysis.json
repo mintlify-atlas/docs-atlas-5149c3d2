@@ -1,0 +1,144 @@
+{
+  "projectType": "api-service",
+  "projectName": "FreeTAKServer",
+  "projectDescription": "Open source TAK server for situational awareness and command-and-control with ATAK, WinTAK, and ITAK clients",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": "#353e9d",
+  "darkColor": "#939ccb",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/cot-messages",
+              "concepts/services",
+              "concepts/components"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/connecting-clients",
+              "guides/ssl-configuration",
+              "guides/federation",
+              "guides/docker-deployment",
+              "guides/data-packages"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/main-config",
+              "configuration/services",
+              "configuration/database",
+              "configuration/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api/rest/missions",
+              "api/rest/data-packages",
+              "api/rest/emergency",
+              "api/rest/geo-objects",
+              "api/rest/excheck",
+              "api/rest/connections"
+            ]
+          },
+          {
+            "group": "TAK API",
+            "pages": [
+              "api/tak/mission-api",
+              "api/tak/enterprise-sync",
+              "api/tak/excheck-api"
+            ]
+          },
+          {
+            "group": "CoT Services",
+            "pages": [
+              "api/cot/tcp-service",
+              "api/cot/ssl-service",
+              "api/cot/message-format"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Components",
+        "groups": [
+          {
+            "group": "Core Components",
+            "pages": [
+              "components/cot-manager",
+              "components/mission",
+              "components/enterprise-sync"
+            ]
+          },
+          {
+            "group": "Extended Components",
+            "pages": [
+              "components/excheck",
+              "components/emergency",
+              "components/federation",
+              "components/track-manager"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "COT (Cursor on Target) message handling",
+    "Mission management and data package sharing",
+    "Federation service for multi-server deployments",
+    "SSL/TCP connection services for TAK clients",
+    "ExCheck checklist support",
+    "REST API for integrations",
+    "Web administration interface",
+    "Real-time geo information sharing",
+    "Emergency management",
+    "Database persistence with SQLAlchemy"
+  ],
+  "publicApiSurface": [
+    "/MissionTable",
+    "/ExCheckTable",
+    "/Alive",
+    "/ManageGeoObject/postGeoObject",
+    "/ManageGeoObject/getGeoObject",
+    "/ManageEmergency/postEmergency",
+    "/ManageEmergency/getEmergency",
+    "/Marti/api/missions",
+    "/Marti/api/sync/missionupload",
+    "/Marti/api/excheck/template",
+    "/Marti/api/excheck/checklist",
+    "TCP CoT Service (port 8087)",
+    "SSL CoT Service (port 8089)",
+    "REST API Service (port 8080)",
+    "TAK API Service (port 8443)"
+  ]
+}
